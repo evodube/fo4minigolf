@@ -33,6 +33,10 @@ namespace mg
 		float guideLength{ 60.0f };     // ...how far it reaches (game units: about 85 cm)
 		bool  guideFlipY{ true };       // (if the line shows up mirrored top to bottom, set 0)
 
+		// [Opponent] a settler played 1v1 (hold the activate key on the course)
+		float oppSkill{ 0.6f };      // 0..1: how true their putts are (1: the physics' own best shot, near enough)
+		float oppRange{ 2000.0f };   // how near you someone has to be to be asked (game units)
+
 		// [Camera]
 		float camDistance{ 85.0f };   // behind the ball
 		float camPitch{ 28.0f };      // degrees down, to start with

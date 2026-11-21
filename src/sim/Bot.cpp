@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <queue>
+#include <thread>
 
 namespace golf
 {
@@ -182,7 +183,7 @@ namespace golf
 		return s;
 	}
 
-	Shot Bot::Choose(const Sim& a_sim, int a_dirs, int a_speeds, std::uint32_t a_seed) const
+	Shot Bot::Choose(const Sim& a_sim, int a_dirs, int a_speeds, std::uint32_t a_seed, int a_threads) const
 	{
 		std::uint32_t rng = a_seed * 2654435761u + 12345u;
 		const double  jitter = (Next(rng) % 1000) / 1000.0;
@@ -191,17 +192,40 @@ namespace golf
 			waits = { 0.0, 0.6, 1.3, 2.1, 3.0 };
 		}
 		Shot best;
+		const int threads = std::clamp(a_threads, 1, a_dirs);
 		for (const double wait : waits) {
-			for (int d = 0; d < a_dirs; ++d) {
-				const double a = (d + jitter) / a_dirs * 6.283185307179586;
-				const Vec2   dir{ std::cos(a), std::sin(a) };
-				for (int k = 0; k < a_speeds; ++k) {
-					// speeds spread geometrically, 20 to full
-					const double speed = 20.0 * std::pow(_spec.maxSpeed / 20.0, k / double(a_speeds - 1));
-					Shot         s = Try(a_sim, dir, speed, wait);
-					if (s.score < best.score) {
-						best = s;
-					}
+			// each thread takes every threads'th direction; the best of their bests
+			std::vector<Shot> bests(static_cast<std::size_t>(threads));
+			const auto        run = [&](int a_first) {
+                Shot& mine = bests[static_cast<std::size_t>(a_first)];
+                for (int d = a_first; d < a_dirs; d += threads) {
+                    const double a = (d + jitter) / a_dirs * 6.283185307179586;
+                    const Vec2   dir{ std::cos(a), std::sin(a) };
+                    for (int k = 0; k < a_speeds; ++k) {
+                        // speeds spread geometrically, 20 to full
+                        const double speed = 20.0 * std::pow(_spec.maxSpeed / 20.0, k / double(a_speeds - 1));
+                        Shot         s = Try(a_sim, dir, speed, wait);
+                        if (s.score < mine.score) {
+                            mine = s;
+                        }
+                    }
+                }
+			};
+			if (threads == 1) {
+				run(0);
+			} else {
+				std::vector<std::thread> pool;
+				for (int i = 1; i < threads; ++i) {
+					pool.emplace_back(run, i);
+				}
+				run(0);
+				for (auto& th : pool) {
+					th.join();
+				}
+			}
+			for (const auto& s : bests) {
+				if (s.score < best.score) {
+					best = s;
 				}
 			}
 			if (best.end == BallState::kInCup) {

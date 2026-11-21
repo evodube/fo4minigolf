@@ -16,7 +16,7 @@ jobs:
         run: |
           g++ -std=c++20 -O2 -Wall -Wextra -Isrc tests/sim_test.cpp src/sim/Sim.cpp src/sim/Course.cpp -o sim_test
           ./sim_test dist/Data/F4SE/Plugins/fo4minigolf/course.txt
-          g++ -std=c++20 -O2 -Wall -Wextra -Isrc tests/course_play.cpp src/sim/Sim.cpp src/sim/Course.cpp src/sim/Bot.cpp -o course_play
+          g++ -std=c++20 -O2 -Wall -Wextra -Isrc tests/course_play.cpp src/sim/Sim.cpp src/sim/Course.cpp src/sim/Bot.cpp -pthread -o course_play
           ./course_play dist/Data/F4SE/Plugins/fo4minigolf/course.txt
 
   build:

@@ -9,7 +9,9 @@
 #include "Settings.h"
 #include "Util.h"
 
+#include <random>
 #include <sstream>
+#include <thread>
 
 namespace mg
 {
@@ -25,6 +27,11 @@ namespace mg
 		constexpr float  kDoneSeconds = 7.0f;
 		constexpr std::size_t kMaxDots = 40;      // the guide line's segments (Dot.nif: a 3-unit piece of green line)
 		constexpr double kTau = 6.283185307179586;
+
+		std::int64_t NowMs()
+		{
+			return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+		}
 
 		RE::FreeCameraState* FreeCamera()
 		{
@@ -211,6 +218,17 @@ namespace mg
 
 	void Golf::PollInput()
 	{
+		// the game's activate key, down or up (a course activated: tapped plays solo, held plays a settler)
+		if (const int vk = _activateVk.load(); vk > 0 && vk < 256) {
+			const bool down = util::GameHasFocus() && (::GetAsyncKeyState(vk) & 0x8000) != 0;
+			const bool was = _activateDown.load();
+			if (down && !was) {
+				_activateDownAt = NowMs();
+			} else if (!down && was) {
+				_activateUpAt = NowMs();
+			}
+			_activateDown = down;
+		}
 		if (!_playing) {
 			// not playing: only the play key (a round on the nearest course)
 			const int vk = Settings::Get().keyPlay;
@@ -239,7 +257,7 @@ namespace mg
 		const auto down = [](int a_vk) { return a_vk > 0 && a_vk < 256 && (::GetAsyncKeyState(a_vk) & 0x8000) != 0; };
 		const bool lmb = down(VK_LBUTTON);
 		const bool rmb = down(VK_RBUTTON);
-		if (lmb && !_lmbWas && _phase == Phase::kAim && !_overhead) {
+		if (lmb && !_lmbWas && _phase == Phase::kAim && !_overhead && !_oppTurn) {
 			_power = 0.0f;
 			_charging = true;  // the mouse's pull is the putt's power now (OnLookMouse)
 		}
@@ -313,6 +331,10 @@ namespace mg
 			_scanTimer = kScanEvery;
 			Scan();
 		}
+		if (_pendingCourse) {
+			_pendingAge += dt;
+			DecidePending();
+		}
 		if (_playing) {
 			if (menus::Open(menus::kDialogue)) {
 				EndRound("a conversation started");
@@ -326,6 +348,13 @@ namespace mg
 
 	void Golf::Scan()
 	{
+		if (auto* map = RE::ControlMap::GetSingleton()) {
+			// (keyboard bindings are Windows virtual-key codes: F = 0x46)
+			const auto vk = map->GetMappedKey("Activate", RE::INPUT_DEVICE::kKeyboard);
+			if (vk != RE::ControlMap::kInvalid && vk > 0 && vk < 0xFF) {
+				_activateVk = static_cast<int>(vk);
+			}
+		}
 		auto* player = RE::PlayerCharacter::GetSingleton();
 		if (!player || !Forms::Course() || !_loaded) {
 			_placed.clear();
@@ -356,10 +385,10 @@ namespace mg
 			for (auto* ref : found) {
 				if ((ref->data.location - player->data.location).Length() < 1200.0f) {
 					_toldHowToPlay = true;
-					RE::SendHUDMessage::ShowHUDMessage(std::format("Mini Golf: activate the course, or press {}, to play a round",
-														   Settings::Key(Settings::Get().keyPlay))
-														   .c_str(),
-						nullptr, false, false);
+					const int         act = _activateVk.load();
+					const std::string key = act > 0 ? Settings::Key(act) : std::string("ACTIVATE");
+					RE::SendHUDMessage::ShowHUDMessage(
+						std::format("Mini Golf: {} on the course plays a round, hold {} to play a settler 1v1", key, key).c_str(), nullptr, false, false);
 					break;
 				}
 			}
@@ -394,7 +423,11 @@ namespace mg
 			RE::SendHUDMessage::ShowHUDMessage("Mini Golf: no course near you", nullptr, false, false);
 			return;
 		}
-		Activated(best);
+		if (!_loaded) {
+			Activated(best);  // (says the data's missing)
+			return;
+		}
+		StartRound(best);  // (the play key: solo)
 	}
 
 	void Golf::Activated(RE::TESObjectREFR* a_ref)
@@ -406,10 +439,49 @@ namespace mg
 			RE::SendHUDMessage::ShowHUDMessage("Mini Golf: the course's data (course.txt) is missing; see the log", nullptr, false, false);
 			return;
 		}
-		StartRound(a_ref);
+		// a tap or a hold? (the game activates on the press: wait for the key)
+		_pendingCourse = a_ref->GetHandle();
+		_pendingAge = 0.0f;
+		if (_activateVk.load() <= 0) {
+			_pendingCourse = {};
+			StartRound(a_ref);
+		}
 	}
 
-	void Golf::StartRound(RE::TESObjectREFR* a_course)
+	void Golf::DecidePending()
+	{
+		auto course = _pendingCourse.get();
+		if (!course || _playing) {
+			_pendingCourse = {};
+			return;
+		}
+		const auto now = NowMs();
+		const auto downAt = _activateDownAt.load();
+		const auto upAt = _activateUpAt.load();
+		bool       hold = false;
+		if (_activateDown.load()) {
+			if (now - downAt < kHoldMs && _pendingAge < 3.0f) {
+				return;  // still down: not yet a hold
+			}
+			hold = now - downAt >= kHoldMs;
+		} else {
+			if (now - upAt > 250 && _pendingAge < 0.2f) {
+				return;  // (the press may not have been seen yet)
+			}
+			hold = upAt > downAt && upAt - downAt >= kHoldMs && now - upAt < 1500;
+		}
+		_pendingCourse = {};
+		RE::Actor* opponent = nullptr;
+		if (hold) {
+			opponent = FindOpponent(course.get());
+			if (!opponent) {
+				RE::SendHUDMessage::ShowHUDMessage("Mini Golf: nobody near enough to play you. A solo round, then", nullptr, false, false);
+			}
+		}
+		StartRound(course.get(), opponent);
+	}
+
+	void Golf::StartRound(RE::TESObjectREFR* a_course, RE::Actor* a_opponent)
 	{
 		auto* camera = RE::PlayerCamera::GetSingleton();
 		if (!camera || !FreeCamera()) {
@@ -418,6 +490,24 @@ namespace mg
 		Settings::Get().Load();
 		_courseRef = a_course->GetHandle();
 		_card.assign(_course.holes.size(), 0);
+		_oppCard.clear();
+		_oppTurn = false;
+		_opponent = {};
+		_opponentName.clear();
+		_plan.reset();
+		_strikeAt = -1.0;
+		if (a_opponent) {
+			_opponent = a_opponent->GetHandle();
+			const char* name = a_opponent->GetDisplayFullName();
+			_opponentName = name ? name : "";
+			if (_opponentName.empty()) {
+				_opponentName = "Settler";
+			}
+			_oppCard.assign(_course.holes.size(), 0);
+			Papyrus::SetRestrained(a_opponent, true);
+			log::info("1v1 against {} ({:08X})", _opponentName, a_opponent->GetFormID());
+			RE::SendHUDMessage::ShowHUDMessage(std::format("Mini Golf: you against {}. You putt first on every hole", _opponentName).c_str(), nullptr, false, false);
+		}
 		_playing = true;
 		EnterCamera();
 		BlockControls(true);
@@ -438,6 +528,9 @@ namespace mg
 		_charging = false;
 		_overhead = false;
 		_showCard = false;
+		_oppTurn = false;
+		_plan.reset();
+		_strikeAt = -1.0;
 		const double yaw = hole.teeYaw * kDegToRad;  // (clockwise from +y, in the course's own frame)
 		_aimDir = { std::sin(yaw), std::cos(yaw) };
 		Frame frame;
@@ -459,6 +552,9 @@ namespace mg
 			_overheadHeight = static_cast<float>(std::clamp(std::max(x1 - x0, y1 - y0) * 1.05, 160.0, 650.0));
 		}
 		MovePlayerToTee();
+		if (Versus()) {
+			OpponentWatching();
+		}
 		Banner(std::format("HOLE {}", hole.number), std::format("{} · PAR {}", Upper(hole.name), hole.par), true);
 		log::info("hole {} ({}, par {})", hole.number, hole.name, hole.par);
 	}
@@ -477,7 +573,19 @@ namespace mg
 			}
 		}
 		log::info("round over ({}): {} strokes over {} holes (par {})", a_why, total, played, par);
-		if (played > 0) {
+		if (Versus() && played > 0) {
+			int theirs = 0;
+			for (std::size_t i = 0; i < _oppCard.size(); ++i) {
+				theirs += _card[i] > 0 ? _oppCard[i] : 0;
+			}
+			const bool        finished = std::ranges::none_of(_oppCard, [](int s) { return s == 0; });
+			const std::string verdict = total < theirs ? std::string("you win") : total > theirs ? std::format("{} wins", _opponentName) : std::string("all square");
+			log::info("against {}: {} to {} ({})", _opponentName, total, theirs, finished ? "the whole round" : "so far");
+			RE::SendHUDMessage::ShowHUDMessage(std::format("Mini Golf: you {}, {} {}{}", total, _opponentName, theirs,
+												   finished ? std::format(": {}", verdict) : std::string(" (the round ended early)"))
+												   .c_str(),
+				nullptr, false, false);
+		} else if (played > 0) {
 			const int diff = total - par;
 			RE::SendHUDMessage::ShowHUDMessage(std::format("Mini Golf: {} strokes over {} hole{} ({}{})", total, played, played == 1 ? "" : "s",
 												   diff > 0 ? "+" : "", diff == 0 ? std::string("even") : std::to_string(diff))
@@ -488,6 +596,11 @@ namespace mg
 		_charging = false;
 		_overhead = false;
 		_phase = Phase::kAim;
+		ReleaseOpponent();
+		_opponent = {};
+		_oppTurn = false;
+		_plan.reset();
+		_strikeAt = -1.0;
 		LeaveCamera();
 		BlockControls(false);
 		RemoveObjects();
@@ -514,20 +627,28 @@ namespace mg
 		if (a_power < 0.02f) {
 			return;  // (no power: no putt, no stroke)
 		}
+		if (_oppTurn) {
+			return;
+		}
 		const auto& s = Settings::Get();
 		const double speed = s.spec.maxSpeed * std::pow(static_cast<double>(std::clamp(a_power, 0.0f, 1.0f)), s.powerCurve);
+		Strike(_aimDir, speed, 0.35f + 0.65f * a_power);
+		log::info("putt {} on hole {}: power {:.0f}% ({:.0f} units/s) towards ({:.2f}, {:.2f})", _stroke, _course.holes[_hole].number,
+			a_power * 100.0f, speed, _aimDir.x, _aimDir.y);
+	}
+
+	void Golf::Strike(golf::Vec2 a_dir, double a_speed, float a_loudness)
+	{
 		_lastRest = _sim->Pos();
-		_sim->Strike(_aimDir, speed);
+		_sim->Strike(a_dir, a_speed);
 		++_stroke;
 		_phase = Phase::kRolling;
 		_phaseTime = 0.0f;
 		_showCard = false;
 		Frame frame;
 		if (auto course = _courseRef.get(); course && FrameOf(course.get(), frame)) {
-			Audio::Play(Audio::Bank::kPutt, ToWorld(frame, _lastRest), 0.35f + 0.65f * a_power);
+			Audio::Play(Audio::Bank::kPutt, ToWorld(frame, _lastRest), a_loudness);
 		}
-		log::info("putt {} on hole {}: power {:.0f}% ({:.0f} units/s) towards ({:.2f}, {:.2f})", _stroke, _course.holes[_hole].number,
-			a_power * 100.0f, speed, _aimDir.x, _aimDir.y);
 	}
 
 	void Golf::TickPlay(float a_dt)
@@ -552,6 +673,10 @@ namespace mg
 				_phase = Phase::kRolling;  // knocked by an obstacle while you aimed: watch it go (no stroke)
 				_phaseTime = 0.0f;
 				_charging = false;
+				_plan.reset();  // (theirs: planned for where it was)
+				_strikeAt = -1.0;
+			} else if (_oppTurn) {
+				TickOpponent();
 			}
 			break;
 		case Phase::kRolling:
@@ -589,7 +714,9 @@ namespace mg
 			break;
 		case Phase::kHoled:
 			if (_phaseTime > kHoledSeconds) {
-				if (_hole + 1 < static_cast<int>(_course.holes.size())) {
+				if (Versus() && !_oppTurn) {
+					StartOpponentTurn();  // your ball's in: their go at the hole
+				} else if (_hole + 1 < static_cast<int>(_course.holes.size())) {
 					StartHole(_hole + 1);
 				} else {
 					int total = 0, par = 0;
@@ -598,8 +725,21 @@ namespace mg
 						par += _course.holes[i].par;
 					}
 					const int diff = total - par;
-					Banner("ROUND OVER", std::format("{} STROKES · {}", total, diff == 0 ? std::string("EVEN PAR") : std::format("{}{}", diff > 0 ? "+" : "", diff)),
-						diff <= 0);
+					if (Versus()) {
+						int theirs = 0;
+						for (const int s : _oppCard) {
+							theirs += s;
+						}
+						const std::string name = Upper(_opponentName);
+						Banner(total < theirs ? std::string("YOU WIN!") : total > theirs ? std::format("{} WINS", name) : std::string("ALL SQUARE"),
+							std::format("YOU {} · {} {}", total, name, theirs), total <= theirs);
+						if (total < theirs) {
+							Audio::PlayUI(Audio::Bank::kHoleIn, 0.8f);
+						}
+					} else {
+						Banner("ROUND OVER", std::format("{} STROKES · {}", total, diff == 0 ? std::string("EVEN PAR") : std::format("{}{}", diff > 0 ? "+" : "", diff)),
+							diff <= 0);
+					}
 					_phase = Phase::kDone;
 					_phaseTime = 0.0f;
 					_showCard = true;
@@ -653,7 +793,7 @@ namespace mg
 		const auto& hole = _course.holes[_hole];
 		const int   max = Settings::Get().maxStrokes;
 		const int   score = a_holed ? _stroke : max;
-		_card[_hole] = score;
+		ActiveCard()[_hole] = score;
 		const int diff = score - hole.par;
 		std::string title;
 		if (!a_holed) {
@@ -675,11 +815,15 @@ namespace mg
 		} else {
 			title = std::format("+{}", diff);
 		}
-		Banner(title, a_holed ? std::format("{} STROKE{}", score, score == 1 ? "" : "S") : std::format("{} STROKES: THE MOST A HOLE TAKES", max), a_holed && diff <= 0);
-		if (a_holed) {
-			Audio::PlayUI(Audio::Bank::kHoleIn, score == 1 ? 1.0f : diff < 0 ? 0.7f : 0.4f);
+		std::string sub = a_holed ? std::format("{} STROKE{}", score, score == 1 ? "" : "S") : std::format("{} STROKES: THE MOST A HOLE TAKES", max);
+		if (_oppTurn) {
+			sub = std::format("{} · {}", Upper(_opponentName), sub);
 		}
-		log::info("hole {}: {} ({} strokes, par {})", hole.number, title, score, hole.par);
+		Banner(title, sub, a_holed && diff <= 0);
+		if (a_holed) {
+			Audio::PlayUI(Audio::Bank::kHoleIn, (score == 1 ? 1.0f : diff < 0 ? 0.7f : 0.4f) * (_oppTurn ? 0.6f : 1.0f));
+		}
+		log::info("hole {}: {}{} ({} strokes, par {})", hole.number, _oppTurn ? _opponentName + ": " : std::string(), title, score, hole.par);
 		_phase = Phase::kHoled;
 		_phaseTime = 0.0f;
 		_showCard = true;
@@ -711,6 +855,249 @@ namespace mg
 		// camera the round is played in doesn't come back from it: a black screen)
 		player->SetPosition(at, true);
 		player->data.angle.z = std::atan2(look.x, look.y);
+	}
+
+	// ---------------------------------------------------------------- the settler you're playing
+
+	RE::Actor* Golf::Opponent() const
+	{
+		auto  ref = _opponent.get();
+		auto* actor = ref ? ref->As<RE::Actor>() : nullptr;
+		if (!actor || actor->IsDead(false) || actor->IsDisabled() || actor->IsDeleted()) {
+			return nullptr;
+		}
+		return actor;
+	}
+
+	RE::Actor* Golf::FindOpponent(RE::TESObjectREFR* a_course) const
+	{
+		// the nearest grown-up, friendly person to you (settlers, companions), not fighting, not in power armour
+		auto* player = RE::PlayerCharacter::GetSingleton();
+		if (!player || !a_course) {
+			return nullptr;
+		}
+		static auto* npcType = RE::TESForm::GetFormByID<RE::BGSKeyword>(0x00013794);  // ActorTypeNPC
+		const float  within = Settings::Get().oppRange;
+		RE::Actor*   best = nullptr;
+		float        bestD = within;
+		util::ForEachLoadedCell([&](RE::TESObjectCELL* a_cell) {
+			a_cell->ForEachReferenceInRange(player->data.location, within, [&](RE::TESObjectREFR* a_ref) {
+				auto* actor = a_ref ? a_ref->As<RE::Actor>() : nullptr;
+				if (!actor || actor == player || actor->IsDisabled() || actor->IsDead(false) || !actor->Get3D() || actor->IsChild() ||
+					actor->IsInCombat() || actor->GetHostileToActor(player) || util::InPowerArmor(actor) ||
+					(npcType && !actor->HasKeywordHelper(npcType, nullptr))) {
+					return RE::BSContainer::ForEachResult::kContinue;
+				}
+				const float d = (actor->data.location - player->data.location).Length();
+				if (d < bestD) {
+					bestD = d;
+					best = actor;
+				}
+				return RE::BSContainer::ForEachResult::kContinue;
+			});
+		});
+		return best;
+	}
+
+	void Golf::StartOpponentTurn()
+	{
+		const auto& hole = _course.holes[_hole];
+		_sim = std::make_unique<golf::Sim>(hole, Settings::Get().spec);
+		_sim->SetTime(_clock);
+		_stroke = 0;
+		_phase = Phase::kAim;
+		_phaseTime = 0.0f;
+		_lastRest = _sim->Pos();
+		_charging = false;
+		_overhead = false;
+		_showCard = false;
+		_oppTurn = true;
+		_plan.reset();
+		_strikeAt = -1.0;
+		_planTries = 0;
+		const double yaw = hole.teeYaw * kDegToRad;
+		_aimDir = { std::sin(yaw), std::cos(yaw) };
+		Frame frame;
+		if (auto course = _courseRef.get(); course && FrameOf(course.get(), frame)) {
+			std::scoped_lock lock(_camMutex);
+			_wantYaw = YawOf(frame, _aimDir);
+			_turnTo = true;
+			_haveCamTarget = false;
+		}
+		PlayerWatching();
+		OpponentAtBall();
+		Banner(std::format("{}'S TURN", Upper(_opponentName)), std::format("HOLE {} · PAR {}", hole.number, hole.par), true);
+		log::info("{} plays hole {}", _opponentName, hole.number);
+	}
+
+	void Golf::TickOpponent()
+	{
+		auto* actor = Opponent();
+		if (!actor) {
+			DropOpponent("they're gone");
+			return;
+		}
+		if (actor->IsInCombat()) {
+			DropOpponent("they're in a fight");
+			return;
+		}
+		if (_strikeAt < 0.0) {
+			if (!_plan) {
+				PlanOpponentShot();
+				return;
+			}
+			if (!_plan->done.load()) {
+				return;  // (still working it out)
+			}
+			golf::Shot shot = _plan->shot;
+			_plan.reset();
+			const bool   moving = !_course.holes[_hole].obstacles.empty();
+			const double at = _planFrom + _planLead + shot.wait;
+			if (at < _clock - 0.05 && moving && _planTries < 3) {
+				++_planTries;  // worked out too slowly: the obstacles have moved on. Again, further ahead
+				PlanOpponentShot();
+				return;
+			}
+			_planTries = 0;
+			// not quite the physics' best: off a little in line and weight, by their skill
+			static std::mt19937              rng{ std::random_device{}() };
+			std::normal_distribution<double> n(0.0, 1.0);
+			const double                     skill = Settings::Get().oppSkill;
+			const double                     da = n(rng) * (0.3 + (1.0 - skill) * 3.5) * kDegToRad;
+			const double                     ds = std::clamp(1.0 + n(rng) * (0.02 + (1.0 - skill) * 0.12), 0.6, 1.4);
+			const double                     c = std::cos(da), s = std::sin(da);
+			shot.dir = { shot.dir.x * c - shot.dir.y * s, shot.dir.x * s + shot.dir.y * c };
+			shot.speed = std::min(shot.speed * ds, Settings::Get().spec.maxSpeed);
+			_oppShot = shot;
+			_strikeAt = std::max(at, _clock + 0.6);
+			_aimDir = shot.dir;
+			Frame frame;
+			if (auto course = _courseRef.get(); course && FrameOf(course.get(), frame)) {
+				std::scoped_lock lock(_camMutex);
+				_wantYaw = YawOf(frame, _aimDir);  // the view turned down their line
+				_turnTo = true;
+			}
+			OpponentAtBall();
+			log::info("{}: putt {} planned at {:.0f} units/s (in {:.1f} s)", _opponentName, _stroke + 1, shot.speed, _strikeAt - _clock);
+			return;
+		}
+		if (_clock >= _strikeAt) {
+			_strikeAt = -1.0;
+			const float loud = static_cast<float>(std::clamp(_oppShot.speed / Settings::Get().spec.maxSpeed, 0.0, 1.0));
+			Strike(_oppShot.dir, _oppShot.speed, 0.35f + 0.65f * loud);
+			log::info("{}: putt {} on hole {}", _opponentName, _stroke, _course.holes[_hole].number);
+		}
+	}
+
+	void Golf::PlanOpponentShot()
+	{
+		// the physics' player (Bot) tries a few hundred shots on a copy of the ball's world as it will be a moment from
+		// now, on a worker thread (it takes a second or two); the putt goes when that moment comes
+		auto plan = std::make_shared<Plan>();
+		_plan = plan;
+		const golf::Hole* hole = &_course.holes[_hole];
+		const bool        moving = !hole->obstacles.empty();
+		_planFrom = _clock;
+		_planLead = (moving ? 3.0 : 1.8) + 2.5 * _planTries;
+		const double        lead = _planLead;
+		const golf::Spec    spec = Settings::Get().spec;
+		const std::uint32_t seed = _planSeed++;
+		golf::Sim           copy = *_sim;
+		std::thread([plan, copy = std::move(copy), hole, spec, lead, seed, moving]() mutable {
+			try {
+				copy.Step(lead);
+				golf::Bot bot(*hole, spec);
+				const int threads = std::clamp(static_cast<int>(std::thread::hardware_concurrency()) - 2, 1, 12);
+				plan->shot = bot.Choose(copy, moving ? 36 : 48, 10, seed, threads);
+			} catch (...) {
+				plan->shot = {};
+			}
+			if (plan->shot.speed <= 0.0) {
+				plan->shot.dir = { 1.0, 0.0 };
+				plan->shot.speed = spec.maxSpeed * 0.3;
+			}
+			plan->done = true;
+		}).detach();
+	}
+
+	void Golf::PlaceOpponent(const golf::Vec3& a_stand, const golf::Vec3& a_look)
+	{
+		auto* actor = Opponent();
+		auto  course = _courseRef.get();
+		Frame frame;
+		if (!actor || !course || !FrameOf(course.get(), frame)) {
+			return;
+		}
+		const auto  at = ToWorld(frame, a_stand);
+		const auto  look = ToWorld(frame, a_look) - at;
+		const float yaw = std::atan2(look.x, look.y);
+		Papyrus::SetPosition(actor, at);
+		Papyrus::SetAngle(actor, 0.0f, 0.0f, yaw / kDegToRad);
+	}
+
+	void Golf::OpponentAtBall()
+	{
+		if (!_sim) {
+			return;
+		}
+		// as you stand: beside the ball, a little back, facing it
+		const auto&      ball = _sim->Pos();
+		const golf::Vec2 side{ -_aimDir.y, _aimDir.x };
+		const double     r = Settings::Get().spec.ballRadius;
+		PlaceOpponent({ ball.x + side.x * 16.0 - _aimDir.x * 4.0, ball.y + side.y * 16.0 - _aimDir.y * 4.0, ball.z - r }, ball);
+	}
+
+	void Golf::OpponentWatching()
+	{
+		if (!_sim) {
+			return;
+		}
+		// the other side of the tee from you, back a bit, watching
+		const auto&      ball = _sim->Pos();
+		const golf::Vec2 side{ -_aimDir.y, _aimDir.x };
+		const double     r = Settings::Get().spec.ballRadius;
+		PlaceOpponent({ ball.x - side.x * 26.0 - _aimDir.x * 16.0, ball.y - side.y * 26.0 - _aimDir.y * 16.0, ball.z - r }, ball);
+	}
+
+	void Golf::PlayerWatching()
+	{
+		auto* player = RE::PlayerCharacter::GetSingleton();
+		auto  course = _courseRef.get();
+		Frame frame;
+		if (!player || !_sim || !course || !FrameOf(course.get(), frame)) {
+			return;
+		}
+		const auto&      ball = _sim->Pos();
+		const golf::Vec2 side{ -_aimDir.y, _aimDir.x };
+		const golf::Vec3 stand{ ball.x - side.x * 26.0 - _aimDir.x * 16.0, ball.y - side.y * 26.0 - _aimDir.y * 16.0, ball.z - Settings::Get().spec.ballRadius };
+		const auto       at = ToWorld(frame, stand);
+		const auto       look = ToWorld(frame, ball) - at;
+		player->SetPosition(at, true);  // (not Papyrus': see MovePlayerToTee)
+		player->data.angle.z = std::atan2(look.x, look.y);
+	}
+
+	void Golf::ReleaseOpponent()
+	{
+		if (auto* actor = Opponent()) {
+			Papyrus::SetRestrained(actor, false);
+			Papyrus::EvaluatePackage(actor);
+			log::info("{}: let go", _opponentName);
+		}
+	}
+
+	void Golf::DropOpponent(const char* a_why)
+	{
+		log::info("{} stopped playing: {}", _opponentName, a_why);
+		RE::SendHUDMessage::ShowHUDMessage(std::format("Mini Golf: {} stopped playing. You play on alone", _opponentName).c_str(), nullptr, false, false);
+		ReleaseOpponent();
+		_opponent = {};
+		_plan.reset();
+		_strikeAt = -1.0;
+		if (_oppTurn) {
+			_oppTurn = false;
+			_phase = Phase::kHoled;  // on to the next hole
+			_phaseTime = kHoledSeconds;
+		}
 	}
 
 	// ---------------------------------------------------------------- the course in the world
@@ -1199,7 +1586,7 @@ namespace mg
 			}
 		}
 		// the aim is where you look (not while charging: it's held)
-		if (haveFrame && _phase == Phase::kAim && !_charging && !_overhead) {
+		if (haveFrame && _phase == Phase::kAim && !_charging && !_overhead && !_oppTurn) {
 			_aimDir = DirToCourse(frame, _camYaw);
 		}
 		// the mouse that turns the view also reaches your own look controls: undone every frame
@@ -1237,8 +1624,24 @@ namespace mg
 			const auto& s = Settings::Get();
 			UpdateGuide();
 			h.guide = _guide;
-			h.keys = std::format("LEFT BUTTON: HOLD, PULL BACK, LET GO TO PUTT · RIGHT BUTTON / {}: VIEW FROM ABOVE · {}: END THE ROUND",
-				Settings::Key(s.keyOverhead), Settings::Key(s.keyLeave));
+			if (_oppTurn) {
+				h.keys = std::format("{} IS PUTTING · RIGHT BUTTON / {}: VIEW FROM ABOVE · {}: END THE ROUND", Upper(_opponentName),
+					Settings::Key(s.keyOverhead), Settings::Key(s.keyLeave));
+			} else {
+				h.keys = std::format("LEFT BUTTON: HOLD, PULL BACK, LET GO TO PUTT · RIGHT BUTTON / {}: VIEW FROM ABOVE · {}: END THE ROUND",
+					Settings::Key(s.keyOverhead), Settings::Key(s.keyLeave));
+			}
+			if (Versus()) {
+				h.opponent = Upper(_opponentName);
+				h.oppCard = _oppCard;
+				h.oppTurn = _oppTurn;
+				for (std::size_t i = 0; i < _oppCard.size(); ++i) {
+					if (_oppCard[i] > 0) {
+						h.oppTotal += _oppCard[i];
+						h.oppParSoFar += _course.holes[i].par;
+					}
+				}
+			}
 		}
 		std::scoped_lock lock(_hudMutex);
 		_hud = std::move(h);
@@ -1254,7 +1657,7 @@ namespace mg
 		auto*       camera = RE::Main::WorldRootCamera();
 		auto        course = _courseRef.get();
 		Frame       frame;
-		if (!s.guide || !_playing || _phase != Phase::kAim || _overhead || !_sim || _sim->Moving() || !camera || !course ||
+		if (!s.guide || !_playing || _phase != Phase::kAim || _overhead || !_sim || _sim->Moving() || !camera || !course || (_oppTurn && _strikeAt < 0.0) ||
 			!FrameOf(course.get(), frame)) {
 			return;
 		}

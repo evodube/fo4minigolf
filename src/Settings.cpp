@@ -49,6 +49,9 @@ namespace mg
 		guideLength = std::clamp(ReadFloat(L"Putting", L"fGuideLength", 60.0f), 0.0f, 1000.0f);
 		guideFlipY = ReadInt(L"Putting", L"bGuideFlipY", 1) != 0;
 
+		oppSkill = std::clamp(ReadFloat(L"Opponent", L"fSkill", 0.6f), 0.0f, 1.0f);
+		oppRange = std::clamp(ReadFloat(L"Opponent", L"fRange", 2000.0f), 200.0f, 10000.0f);
+
 		camDistance = std::clamp(ReadFloat(L"Camera", L"fDistance", 85.0f), 20.0f, 400.0f);
 		camPitch = std::clamp(ReadFloat(L"Camera", L"fPitch", 28.0f), 0.0f, 89.0f);
 		camMinPitch = std::clamp(ReadFloat(L"Camera", L"fMinPitch", 6.0f), -20.0f, 89.0f);

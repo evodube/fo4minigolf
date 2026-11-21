@@ -190,6 +190,10 @@ namespace mg::Hud
 			const float x = 30.0f, y = 26.0f, w = 330.0f, h = 108.0f;
 			Chamfer(a_v, x, y, w, h, 10.0f, kPanel, kEdge);
 			Print(a_v, Mono(), std::format("HOLE {} OF 18", a_st.hole), x + 16, y + 10, 13, kDim, 0, 2.0f);
+			if (!a_st.opponent.empty()) {
+				Print(a_v, Mono(), a_st.oppTurn ? std::format("{} PUTTING", a_st.opponent) : std::string("YOUR PUTT"), x + w - 16, y + 10, 13,
+					a_st.oppTurn ? kText : kBright, 0, 1.0f, Align::kRight);
+			}
 			Print(a_v, Title(), a_st.name, x + 16, y + 28, 28, kBright, kGlow, 1.0f);
 			Print(a_v, Mono(), std::format("PAR {}", a_st.par), x + 16, y + 76, 16, kText, 0, 2.0f);
 			Print(a_v, Mono(), std::format("STROKE {}", a_st.stroke), x + w - 16, y + 76, 16, kBright, kGlow, 2.0f, Align::kRight);
@@ -198,6 +202,25 @@ namespace mg::Hud
 		// top right: the round so far
 		void TotalPanel(const View& a_v, const Golf::HudState& a_st)
 		{
+			if (!a_st.opponent.empty()) {
+				// 1v1: you and them, each against par so far and in strokes
+				const float w = 300.0f, h = 92.0f, x = a_v.w - w - 30.0f, y = 26.0f;
+				Chamfer(a_v, x, y, w, h, 10.0f, kPanel, kEdge);
+				Print(a_v, Mono(), "1V1", x + 16, y + 10, 13, kDim, 0, 2.0f);
+				const auto row = [&](const std::string& a_name, int a_total, int a_par, float a_y, bool a_on) {
+					const int diff = a_total - a_par;
+					Print(a_v, Mono(), a_name, x + 16, a_y, 15, a_on ? kBright : kText, a_on ? kGlow : 0, 1.0f);
+					Print(a_v, Mono(), std::format("{}", a_total), x + w - 90, a_y, 15, kText, 0, 1.0f, Align::kRight);
+					Print(a_v, Mono(), Signed(diff), x + w - 16, a_y, 15, diff <= 0 ? kBright : kRedText, 0, 1.0f, Align::kRight);
+				};
+				std::string them = a_st.opponent;
+				if (them.size() > 16) {
+					them = them.substr(0, 16);
+				}
+				row("YOU", a_st.total, a_st.parSoFar, y + 34, !a_st.oppTurn);
+				row(them, a_st.oppTotal, a_st.oppParSoFar, y + 60, a_st.oppTurn);
+				return;
+			}
 			const float w = 190.0f, h = 78.0f, x = a_v.w - w - 30.0f, y = 26.0f;
 			Chamfer(a_v, x, y, w, h, 10.0f, kPanel, kEdge);
 			Print(a_v, Mono(), "ROUND", x + 16, y + 10, 13, kDim, 0, 2.0f);
@@ -251,20 +274,36 @@ namespace mg::Hud
 			}
 			const int   n = static_cast<int>(a_st.card.size());
 			const float cell = 50.0f, label = 80.0f, half = static_cast<float>((n + 1) / 2);
-			const float w = label + cell * (half + 1.0f) + 28.0f, rowH = 26.0f;
-			const float h = 36.0f + rowH * 6.0f, x = a_v.w * 0.5f - w * 0.5f, y = a_v.h - h - 150.0f;
+			const bool  versus = !a_st.opponent.empty() && a_st.oppCard.size() == a_st.card.size();
+			const int   rows = versus ? 4 : 3;
+			const float w = label + 40.0f * versus + cell * (half + 1.0f) + 28.0f, rowH = 26.0f;
+			const float h = 36.0f + rowH * rows * 2.0f, x = a_v.w * 0.5f - w * 0.5f, y = a_v.h - h - 150.0f;
+			const float lw = label + 40.0f * versus;  // (the labels' column: wider for a name)
+			std::string them = a_st.opponent;
+			if (them.size() > 10) {
+				them = them.substr(0, 10);
+			}
 			Chamfer(a_v, x, y, w, h, 12.0f, kPanel, kEdge);
 			Print(a_v, Mono(), a_st.finished ? "FINAL SCORECARD" : "SCORECARD", x + 14, y + 10, 13, kDim, 0, 2.0f);
 			for (int half_ = 0; half_ < 2; ++half_) {
 				const int   first = half_ * static_cast<int>(half);
 				const int   last = std::min(n, first + static_cast<int>(half));
-				const float ry = y + 34.0f + half_ * rowH * 3.0f;
+				const float ry = y + 34.0f + half_ * rowH * static_cast<float>(rows);
 				Print(a_v, Mono(), "HOLE", x + 14, ry, 13, kDim, 0, 1.0f);
 				Print(a_v, Mono(), "PAR", x + 14, ry + rowH, 13, kDim, 0, 1.0f);
 				Print(a_v, Mono(), "YOU", x + 14, ry + rowH * 2, 13, kText, 0, 1.0f);
-				int par = 0, you = 0;
+				if (versus) {
+					Print(a_v, Mono(), them, x + 14, ry + rowH * 3, 13, kText, 0, 1.0f);
+				}
+				int par = 0, you = 0, theirs = 0;
 				for (int i = first; i < last; ++i) {
-					const float cx = x + label + cell * static_cast<float>(i - first) + cell * 0.5f;
+					const float cx = x + lw + cell * static_cast<float>(i - first) + cell * 0.5f;
+					if (versus && a_st.oppCard[i] > 0) {
+						const int   d = a_st.oppCard[i] - a_st.pars[i];
+						const ImU32 col = d < 0 ? kBright : d == 0 ? kText : kRedText;
+						Print(a_v, Mono(), std::format("{}", a_st.oppCard[i]), cx, ry + rowH * 3, 15, col, d < 0 ? kGlow : 0, 0.0f, Align::kCentre);
+						theirs += a_st.oppCard[i];
+					}
 					const bool  current = i + 1 == a_st.hole;
 					Print(a_v, Mono(), std::format("{}", i + 1), cx, ry, 13, current ? kBright : kDim, 0, 0.0f, Align::kCentre);
 					Print(a_v, Mono(), std::format("{}", a_st.pars[i]), cx, ry + rowH, 14, kText, 0, 0.0f, Align::kCentre);
@@ -276,11 +315,14 @@ namespace mg::Hud
 						you += a_st.card[i];
 					}
 				}
-				const float tx = x + label + cell * half + cell * 0.5f;
+				const float tx = x + lw + cell * half + cell * 0.5f;
 				Print(a_v, Mono(), half_ == 0 ? "OUT" : "IN", tx, ry, 13, kDim, 0, 0.0f, Align::kCentre);
 				Print(a_v, Mono(), std::format("{}", par), tx, ry + rowH, 14, kText, 0, 0.0f, Align::kCentre);
 				if (you > 0) {
 					Print(a_v, Mono(), std::format("{}", you), tx, ry + rowH * 2, 15, kBright, kGlow, 0.0f, Align::kCentre);
+				}
+				if (theirs > 0) {
+					Print(a_v, Mono(), std::format("{}", theirs), tx, ry + rowH * 3, 15, kBright, kGlow, 0.0f, Align::kCentre);
 				}
 			}
 		}

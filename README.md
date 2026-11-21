@@ -8,7 +8,11 @@ own ball physics (like Playable Pool). Between holes you're moved to the next te
 Build the **Mini Golf Course** from the workshop (Furniture > Mini Golf) and activate it (or press **Numpad 7**
 anywhere on or near it) to start a round at hole 1.
 
-- **Aim:** look where you want the ball to go; the dots show where it'll roll.
+**Hold** the activate key on the course instead to play the nearest settler 1v1 (or a companion: any grown-up,
+friendly person within about 28 m). You putt first on every hole, then they play it; the lowest total over the 18
+wins. How true their putts are is `[Opponent] fSkill` in the ini.
+
+- **Aim:** look where you want the ball to go; the green line shows the line you're starting it on.
 - **Putt:** hold the left mouse button, pull the mouse back for power (the meter at the bottom), let go.
 - **Right mouse button / Q:** look down on the whole hole.
 - **X:** end the round.
@@ -64,7 +68,8 @@ game's textures where it has a fitting one, and our own for the carpet, signs, r
   lip out.
 - **Hazards:** water and out of bounds: one stroke, back to where the shot was played from.
 - **A bot** (`src/sim/Bot`) plays shots on a copy of the physics and keeps the one ending nearest the cup, measured
-  round the walls. The course test has it play all 18 holes; it'll be the settlers' brain later.
+  round the walls. The course test has it play all 18 holes, and it's the settler's brain in a 1v1: worked out on worker
+  threads a moment ahead of the putt (timing the obstacles), then put a little off line and weight by their skill.
 
 ## The plugin
 

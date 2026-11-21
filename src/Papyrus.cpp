@@ -62,4 +62,14 @@ namespace mg::Papyrus
 	{
 		return CallActor(a_actor, "SetAngle", a_x, a_y, a_z);
 	}
+
+	bool SetRestrained(RE::Actor* a_actor, bool a_restrained)
+	{
+		return CallActor(a_actor, "SetRestrained", a_restrained);
+	}
+
+	bool EvaluatePackage(RE::Actor* a_actor)
+	{
+		return CallActor(a_actor, "EvaluatePackage");
+	}
 }

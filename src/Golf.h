@@ -1,5 +1,6 @@
 #pragma once
 
+#include "sim/Bot.h"
 #include "sim/Course.h"
 #include "sim/Sim.h"
 
@@ -9,6 +10,10 @@
 // Activating a course starts a round at hole 1. The view is the free camera, orbiting the ball: you aim by looking,
 // hold the left mouse button and pull the mouse back for power, let go to putt. The right button looks down on the
 // whole hole. Between holes you're moved to the next tee: no walking. X ends the round.
+//
+// Holding the activate key on the course (rather than tapping it) plays a settler 1v1: the nearest one (settlers,
+// companions: grown-up, friendly people) plays each hole after you, their shots worked out by the physics (Bot) on a
+// worker thread, made less than perfect by [Opponent] fSkill. Lowest total over the 18 wins.
 //
 // Threads: Tick runs on the game's main thread (queued from the render thread every frame), as do the camera hooks
 // (the camera's update) and Animate. OnPresent and PollInput run on the render thread; Hud() on the UI's (both take
@@ -76,6 +81,12 @@ namespace mg
 			bool             finished{ false };  // the round's over: the final card
 			std::string      keys;               // the key hints
 			std::vector<std::array<float, 2>> guide;  // the aim line: screen points 0..1, from the ball's edge outwards
+			// a 1v1 against a settler (opponent empty: solo)
+			std::string      opponent;           // their name, upper case
+			std::vector<int> oppCard;
+			int              oppTotal{ 0 };
+			int              oppParSoFar{ 0 };
+			bool             oppTurn{ false };   // they're playing the hole now
 		};
 		HudState Hud() const;
 
@@ -103,10 +114,12 @@ namespace mg
 		void Scan();
 		void UpdateGuide();
 		void PlayNearest();
-		void StartRound(RE::TESObjectREFR* a_course);
+		void DecidePending();  // a course activated: a tap plays solo, a hold a settler
+		void StartRound(RE::TESObjectREFR* a_course, RE::Actor* a_opponent = nullptr);
 		void StartHole(int a_index);
 		void EndRound(const char* a_why);
 		void Putt(float a_power);
+		void Strike(golf::Vec2 a_dir, double a_speed, float a_loudness);
 		void TickPlay(float a_dt);
 		void ShotEvents(const std::vector<golf::Event>& a_events);
 		void FinishHole(bool a_holed);
@@ -120,6 +133,21 @@ namespace mg
 		void RemoveObjects();
 		void UpdateHud();
 		static bool IsGamePaused();
+
+		// the settler you're playing
+		RE::Actor*  Opponent() const;
+		RE::Actor*  FindOpponent(RE::TESObjectREFR* a_course) const;
+		void        StartOpponentTurn();
+		void        TickOpponent();
+		void        PlanOpponentShot();
+		void        PlaceOpponent(const golf::Vec3& a_stand, const golf::Vec3& a_look);
+		void        OpponentAtBall();     // beside their ball, facing the aim
+		void        OpponentWatching();   // to the side of the tee while you play
+		void        PlayerWatching();     // you, off to the side while they play
+		void        ReleaseOpponent();
+		void        DropOpponent(const char* a_why);  // gone mid-round: you play on alone
+		bool        Versus() const { return static_cast<bool>(_opponent); }
+		std::vector<int>& ActiveCard() { return _oppTurn ? _oppCard : _card; }
 
 		bool         FrameOf(RE::TESObjectREFR* a_course, Frame& a_out) const;
 		RE::NiPoint3 ToWorld(const Frame& a_frame, const golf::Vec3& a_p) const;
@@ -149,6 +177,32 @@ namespace mg
 		float               _scanTimer{ 0.0f };
 		bool                _toldHowToPlay{ false };
 		bool                _cameraOffAfterLoad{ false };  // the free camera still to switch off (LeaveCamera under a loading screen)  // the first time you're near a course: how to play, once
+
+		// ---- the activate key: tapped or held on the course
+		std::atomic<int>                      _activateVk{ 0 };
+		std::atomic<bool>                     _activateDown{ false };
+		std::atomic<std::int64_t>             _activateDownAt{ 0 }, _activateUpAt{ 0 };  // (steady clock, ms)
+		RE::ObjectRefHandle                   _pendingCourse;  // activated: waiting to see if it's a hold
+		float                                 _pendingAge{ 0.0f };
+		static constexpr std::int64_t         kHoldMs = 500;
+
+		// ---- the settler you're playing (none: solo)
+		RE::ObjectRefHandle _opponent;
+		std::string         _opponentName;
+		std::vector<int>    _oppCard;
+		std::atomic<bool>   _oppTurn{ false };
+		struct Plan  // their next shot, worked out on a worker thread
+		{
+			std::atomic<bool> done{ false };
+			golf::Shot        shot;
+		};
+		std::shared_ptr<Plan> _plan;
+		double                _planFrom{ 0.0 };   // the clock when it was asked for
+		double                _planLead{ 0.0 };   // ...it plans the ball as it'll be this long after
+		double                _strikeAt{ -1.0 };  // the clock their putt goes at (-1: no shot planned yet)
+		golf::Shot            _oppShot;
+		int                   _planTries{ 0 };
+		std::uint32_t         _planSeed{ 1 };
 
 		// ---- your round
 		std::atomic<bool>          _playing{ false };

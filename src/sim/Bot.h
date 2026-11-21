@@ -31,7 +31,8 @@ namespace golf
 
 		// The best shot from where a_sim's ball is now, out of a_dirs directions x a_speeds speeds (x a few waits,
 		// if the hole has moving obstacles). a_seed varies the directions tried a little.
-		Shot Choose(const Sim& a_sim, int a_dirs = 72, int a_speeds = 12, std::uint32_t a_seed = 1) const;
+		// a_threads: the directions shared out over that many threads (a settler's shot in the game: a second, not ten)
+		Shot Choose(const Sim& a_sim, int a_dirs = 72, int a_speeds = 12, std::uint32_t a_seed = 1, int a_threads = 1) const;
 
 		// Plays a shot on a copy and says how it ends.
 		Shot Try(const Sim& a_sim, Vec2 a_dir, double a_speed, double a_wait) const;
