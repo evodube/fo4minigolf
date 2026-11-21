@@ -8,6 +8,11 @@ namespace mg::util
 		return data ? reinterpret_cast<HWND>(data->renderWindow[0].hwnd) : nullptr;
 	}
 
+	inline bool InPowerArmor(RE::Actor* a_actor)
+	{
+		return a_actor && RE::PowerArmor::ActorInPowerArmor(*a_actor);
+	}
+
 	inline bool GameHasFocus()
 	{
 		const HWND window = GameWindow();
