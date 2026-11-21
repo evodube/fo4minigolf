@@ -92,6 +92,12 @@ def _dds_level(img, fmt):
     return data[:header_len], data[header_len:]
 
 
+def save_bc7(img, path):
+    sys.path.insert(0, HERE)
+    from dds import save_dds as _save  # (Wasteland Wagers' writer: BC7 through etcpak, DXGI 98)
+    _save(img, path, "BC7")
+
+
 def save_dds(img, path, fmt):
     """Saves with a full mip chain. fmt: DXT1, DXT5 or BC5."""
     img = img.convert("RGBA" if fmt == "DXT5" else "RGB")
@@ -147,13 +153,15 @@ def write_set(out, name, diffuse, height, strength, spec, gloss):
 
     n = normal_from_height(height, strength)
     size = n.shape[0]
-    rg = np.dstack([n[..., 0] * 0.5 + 0.5, n[..., 1] * 0.5 + 0.5, np.zeros((size, size))])
-    save_dds(to_img(rg), os.path.join(out, f"{name}_n.dds"), "BC5")
+    # full RGB normals (x, y and z) in BC7, as Wasteland Wagers' are: Pillow writes BC5 as DXGI 82 (BC5_TYPELESS),
+    # which the game misreads (garbage normals and gloss: the carpet's light and dark patches)
+    rgb = np.dstack([n[..., 0] * 0.5 + 0.5, n[..., 1] * 0.5 + 0.5, n[..., 2] * 0.5 + 0.5])
+    save_bc7(to_img(rgb), os.path.join(out, f"{name}_n.dds"))
 
     s = np.broadcast_to(np.asarray(spec, dtype=np.float64), height.shape)
     g = np.broadcast_to(np.asarray(gloss, dtype=np.float64), height.shape)
     sg = to_img(np.dstack([s, g, np.zeros_like(s)])).resize((256, 256), Image.LANCZOS)  # little detail: small
-    save_dds(sg, os.path.join(out, f"{name}_s.dds"), "BC5")
+    save_dds(sg, os.path.join(out, f"{name}_s.dds"), "DXT1")  # (R specular, G gloss: plain DXT1, as Wagers')
     print("wrote", name)
 
 
@@ -341,8 +349,8 @@ def signs(out, name):
         d.save(os.path.join(out, f"{name}_d.png"))
     save_dds(d, os.path.join(out, f"{name}_d.dds"), "DXT1")
     flat = np.zeros((H, W))
-    save_dds(to_img(np.dstack([flat + 0.5, flat + 0.5, flat])).resize((64, 64)), os.path.join(out, f"{name}_n.dds"), "BC5")
-    save_dds(to_img(np.dstack([flat + 0.06, flat + 0.2, flat])).resize((64, 64)), os.path.join(out, f"{name}_s.dds"), "BC5")
+    save_dds(to_img(np.dstack([flat + 0.5, flat + 0.5, flat + 1.0])).resize((64, 64)), os.path.join(out, f"{name}_n.dds"), "DXT1")
+    save_dds(to_img(np.dstack([flat + 0.06, flat + 0.2, flat])).resize((64, 64)), os.path.join(out, f"{name}_s.dds"), "DXT1")
     print("wrote", name)
 
 
@@ -366,8 +374,8 @@ def flags(out, name):
         d.save(os.path.join(out, f"{name}_d.png"))
     save_dds(d, os.path.join(out, f"{name}_d.dds"), "DXT1")
     flat = np.zeros((H, W))
-    save_dds(to_img(np.dstack([flat + 0.5, flat + 0.5, flat])).resize((64, 64)), os.path.join(out, f"{name}_n.dds"), "BC5")
-    save_dds(to_img(np.dstack([flat + 0.05, flat + 0.15, flat])).resize((64, 64)), os.path.join(out, f"{name}_s.dds"), "BC5")
+    save_dds(to_img(np.dstack([flat + 0.5, flat + 0.5, flat + 1.0])).resize((64, 64)), os.path.join(out, f"{name}_n.dds"), "DXT1")
+    save_dds(to_img(np.dstack([flat + 0.05, flat + 0.15, flat])).resize((64, 64)), os.path.join(out, f"{name}_s.dds"), "DXT1")
     print("wrote", name)
 
 
