@@ -29,7 +29,7 @@ Needs F4SE, the Address Library, and F4SE Menu Framework for the HUD. Works on 1
 About 18 m square, after a 1950s roadside putt-putt that came through the bombs: brick, stone, scrap metal and
 Vault-Tec steel rails with moulded caps, real cut cups, mini golf carpet (the turf is only ever turf: the hazards are
 sand bunkers, no water), raised tees, ramps, banked turns and drops, and a set piece on most holes: a Dutch smock
-windmill, a streamline diner, a stone gatehouse, a crane and wrecking ball, Mr. Handy, two giant Nuka-Cola bottles. The
+windmill, a streamline diner, a stone gatehouse, a crane and wrecking ball, Mr. Handy, three giant Nuka-Cola bottles. The
 holes are laid out with a clear gap between every two of them (nothing touches), and the lawn between is planted with
 the game's own clipped boxwoods, holly, roses and rocks (`tools/course/dressing.py`). The set pieces and holes use the
 game's textures where it has a fitting one, and our own for the carpet, signs, rubber, steel, glass, canvas and lamps
@@ -39,7 +39,7 @@ game's textures where it has a fitting one, and our own for the carpet, signs, r
 |---|------|-----|-------|--------------|
 | 1 | Welcome Mat | 2 | dogleg left | a mound, tyre stacks |
 | 2 | Old Windmill | 3 | rise, then down and right | the windmill on a rise, its sails block the tunnel; a ramp down to the green, a bunker |
-| 3 | Nuka Alley | 4 | banked S-bend, climbing | two giant Nuka-Cola bottles |
+| 3 | Nuka Alley | 3 | banked S-bend, climbing | three giant Nuka-Cola bottles |
 | 4 | Rust Ramp | 3 | steep ramp, hard left | a scrap-metal plateau, a bunker |
 | 5 | Toxic Crossing | 2 | dumbbell | a hump between sand bunkers |
 | 6 | Vertibird | 3 | uphill, right bend, big round green | a rotor sweeping the green, a bunker |

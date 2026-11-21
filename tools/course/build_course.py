@@ -1065,7 +1065,7 @@ def hole03(H):  # Nuka Alley: a banked S-bend climbing between giant Nuka-Cola b
     H.shape([("L", 40), ("A", 90, 55), ("A", 90, -55), ("L", 40)], 28, circles=[(40 + 2 * 90 * math.radians(55) + 40, 0, 32)])
     L = H.path.length
     H.lane(H.banked(lambda s, d: 12.0 * smoothstep(20.0, L - 40.0, s), 22.0))
-    for i, (s, d) in enumerate(((100, -11), (168, 11))):  # one in each bend
+    for i, (s, d) in enumerate(((88, -11), (133, 12), (178, -11))):
         z = H.z(s, d)
         with H.section(s, d):
             P.vanilla(H, f"Bottle{i}", "meshes/props/nukacolabottlefullprewar.nif", (0, 0, z - 0.3), height=34.0,
