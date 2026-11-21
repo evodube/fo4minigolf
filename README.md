@@ -53,7 +53,7 @@ game's textures where it has a fitting one, and our own for the carpet, signs, r
 | 14 | Glowing Sea | 3 | wide wave | rolling ground, three sand bunkers |
 | 15 | Castle Gate | 2 | ramp up, through the gate, bend | the gatehouse and a rising portcullis |
 | 16 | Mr. Handy | 4 | curving barbell | his three arms sweeping the green, a bunker by the cup |
-| 17 | Zigzag | 3 | three switchbacks down a hillside | terraces with a ramp down round each bend |
+| 17 | Zigzag | 2 | three switchbacks down a hillside | terraces with a ramp down round each bend |
 | 18 | Last Stop | 2 | banked sweep up into a funnel | a bunker at its mouth |
 
 ## Physics
