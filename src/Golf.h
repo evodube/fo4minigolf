@@ -145,6 +145,7 @@ namespace mg
 		void        OpponentWatching();   // to the side of the tee while you play
 		void        PlayerWatching();     // you, off to the side while they play
 		void        ReleaseOpponent();
+		void        ShowOpponent(bool a_show);  // their 3D culled or not ([Opponent] bHide)
 		void        DropOpponent(const char* a_why);  // gone mid-round: you play on alone
 		bool        Versus() const { return static_cast<bool>(_opponent); }
 		std::vector<int>& ActiveCard() { return _oppTurn ? _oppCard : _card; }

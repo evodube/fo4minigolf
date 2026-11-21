@@ -656,6 +656,9 @@ namespace mg
 		if (!_sim || !_courseRef.get()) {
 			return;
 		}
+		if (Versus() && Settings::Get().oppHidden) {
+			ShowOpponent(false);  // (every tick: their 3D can be rebuilt)
+		}
 		_phaseTime += a_dt;
 		_shotSoundGap = std::max(0.0f, _shotSoundGap - a_dt);
 		// the ball's clock keeps up with the obstacles' (they go by _clock, the ball's world by the sim's own)
@@ -1022,6 +1025,9 @@ namespace mg
 
 	void Golf::PlaceOpponent(const golf::Vec3& a_stand, const golf::Vec3& a_look)
 	{
+		if (Settings::Get().oppHidden) {
+			return;  // (invisible: they stay where they were)
+		}
 		auto* actor = Opponent();
 		auto  course = _courseRef.get();
 		Frame frame;
@@ -1076,8 +1082,18 @@ namespace mg
 		player->data.angle.z = std::atan2(look.x, look.y);
 	}
 
+	void Golf::ShowOpponent(bool a_show)
+	{
+		auto* actor = Opponent();
+		auto* root = actor ? actor->Get3D() : nullptr;
+		if (root && root->GetAppCulled() == a_show) {
+			root->SetAppCulled(!a_show);
+		}
+	}
+
 	void Golf::ReleaseOpponent()
 	{
+		ShowOpponent(true);
 		if (auto* actor = Opponent()) {
 			Papyrus::SetRestrained(actor, false);
 			Papyrus::EvaluatePackage(actor);

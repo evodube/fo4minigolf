@@ -51,6 +51,7 @@ namespace mg
 
 		oppSkill = std::clamp(ReadFloat(L"Opponent", L"fSkill", 0.6f), 0.0f, 1.0f);
 		oppRange = std::clamp(ReadFloat(L"Opponent", L"fRange", 2000.0f), 200.0f, 10000.0f);
+		oppHidden = ReadInt(L"Opponent", L"bHide", 1) != 0;
 
 		camDistance = std::clamp(ReadFloat(L"Camera", L"fDistance", 85.0f), 20.0f, 400.0f);
 		camPitch = std::clamp(ReadFloat(L"Camera", L"fPitch", 28.0f), 0.0f, 89.0f);

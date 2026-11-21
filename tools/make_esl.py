@@ -16,6 +16,10 @@ Form IDs (src/Forms.h expects these):
     xx000803  STAT fo4minigolfBall          the ball the plugin moves (Meshes\\fo4minigolf\\Ball.nif)
     xx000804  STAT fo4minigolfPutter        the putter behind the ball as you aim
     xx000805  STAT fo4minigolfDot           a guide dot: the aiming line is a row of them
+    xx000806  TRNS fo4minigolfCoursePreview the course framed small in the workshop menu (its PTRN): the whole lawn
+                                            seen from above at a fifth of its size, as the game's shack
+                                            prefabs are (workshop_ShackMetalPrefabComplete01)
+    xx000807  ARTO fo4minigolfWorkshopMenuArt  the Mini Golf category's picture: the course, so framed
 """
 
 import struct
@@ -86,17 +90,44 @@ def workshop_recipe(form_id: int, editor_id: str, created: int, components: list
     )
 
 
-def activator(form_id: int, editor_id: str, name: str, mesh: str, bounds: tuple, prompt: str) -> bytes:
-    """an activator with no script (activating it is what the plugin listens for); its settlement happier for it"""
+def activator(form_id: int, editor_id: str, name: str, mesh: str, bounds: tuple, prompt: str, preview: int) -> bytes:
+    """an activator with no script (activating it is what the plugin listens for); its settlement happier for it;
+    framed in the workshop menu by preview (a TRNS)"""
     return record(
         b"ACTI", 0, form_id,
         subrecord(b"EDID", zstring(editor_id))
         + subrecord(b"OBND", struct.pack("<6h", *bounds))
+        + subrecord(b"PTRN", struct.pack("<I", preview))
         + subrecord(b"FULL", zstring(name))
         + subrecord(b"MODL", zstring(mesh))
         + subrecord(b"PRPS", struct.pack("<IfIf", WORKSHOP_BONUS_HAPPINESS, HAPPINESS, WORKSHOP_RESOURCE_OBJECT, 1.0))
         + subrecord(b"ATTX", zstring(prompt))
         + subrecord(b"FNAM", struct.pack("<H", 0)),
+    )
+
+
+def transform(form_id: int, editor_id: str, pos: tuple, rot: tuple, scale: float) -> bytes:
+    """a preview framing (as Fallout4.esm's TRNS): the camera's offset, the object's turn (radians), its scale,
+    and the zoom range"""
+    return record(
+        b"TRNS", 0, form_id,
+        subrecord(b"EDID", zstring(editor_id))
+        + subrecord(b"DATA", struct.pack("<9f", *pos, *rot, scale, -1.0, 1.0)),
+    )
+
+
+def menu_art(form_id: int, editor_id: str, keyword_id: int, mesh: str, preview: int, bounds: tuple) -> bytes:
+    """the picture on a workshop menu tab: an art object with the tab's keyword (the menu finds a tab's art by it;
+    Amusement Games' and Wasteland Wagers' way)"""
+    return record(
+        b"ARTO", 0, form_id,
+        subrecord(b"EDID", zstring(editor_id))
+        + subrecord(b"OBND", struct.pack("<6h", *bounds))
+        + subrecord(b"PTRN", struct.pack("<I", preview))
+        + subrecord(b"KSIZ", struct.pack("<I", 1))
+        + subrecord(b"KWDA", struct.pack("<I", keyword_id))
+        + subrecord(b"MODL", zstring(mesh))
+        + subrecord(b"DNAM", struct.pack("<I", 0)),
     )
 
 
@@ -114,27 +145,34 @@ def stat(form_id: int, editor_id: str, mesh: str, bounds: tuple) -> bytes:
 def build() -> bytes:
     menu = OWN | FIRST_ID
     course = OWN | (FIRST_ID + 1)
+    preview = OWN | (FIRST_ID + 6)
     keywords = [menu_keyword(menu, "fo4minigolfWorkshopMenu", "Mini Golf")]
-    acti = [activator(course, "fo4minigolfCourse", "Mini Golf Course", "fo4minigolf\\Course.nif", COURSE_BOUNDS, "Play")]
+    # the whole course, a fifth of its size, from a little way off and above, turned a quarter so the holes read
+    transforms = [transform(preview, "fo4minigolfCoursePreview", (0.0, 1100.0, -20.0), (5.585, 0.0, 0.785), 0.2)]
+    acti = [activator(course, "fo4minigolfCourse", "Mini Golf Course", "fo4minigolf\\Course.nif", COURSE_BOUNDS, "Play",
+                      preview)]
+    art = [menu_art(OWN | (FIRST_ID + 7), "fo4minigolfWorkshopMenuArt", menu, "fo4minigolf\\Course.nif", preview,
+                    COURSE_BOUNDS)]
     recipes = [workshop_recipe(OWN | (FIRST_ID + 2), "workshop_co_fo4minigolfCourse", course,
                                [(WOOD, 60), (STEEL, 30), (SCREWS, 6)], menu)]
     stats = [stat(OWN | (FIRST_ID + 3), "fo4minigolfBall", "fo4minigolf\\Ball.nif", BALL_BOUNDS),
              stat(OWN | (FIRST_ID + 4), "fo4minigolfPutter", "fo4minigolf\\Putter.nif", PUTTER_BOUNDS),
              stat(OWN | (FIRST_ID + 5), "fo4minigolfDot", "fo4minigolf\\Dot.nif", DOT_BOUNDS)]
-    count = len(keywords) + len(acti) + len(recipes) + len(stats)
+    count = len(keywords) + len(transforms) + len(acti) + len(recipes) + len(stats) + len(art)
     header = record(
         b"TES4",
         FLAG_MASTER | FLAG_LIGHT,
         0,
-        subrecord(b"HEDR", struct.pack("<fiI", 1.0, count, FIRST_ID + 6))
+        subrecord(b"HEDR", struct.pack("<fiI", 1.0, count, FIRST_ID + 8))
         + subrecord(b"CNAM", zstring("evodube"))
         + subrecord(b"SNAM", zstring("Mini golf: an 18-hole course for your settlements"))
         + subrecord(b"MAST", zstring("Fallout4.esm"))
         + subrecord(b"DATA", struct.pack("<Q", 0)),
     )
     # groups in the order the game's own master has them
-    return (header + group(b"KYWD", b"".join(keywords)) + group(b"ACTI", b"".join(acti))
-            + group(b"STAT", b"".join(stats)) + group(b"COBJ", b"".join(recipes)))
+    return (header + group(b"KYWD", b"".join(keywords)) + group(b"TRNS", b"".join(transforms))
+            + group(b"ACTI", b"".join(acti)) + group(b"STAT", b"".join(stats)) + group(b"ARTO", b"".join(art))
+            + group(b"COBJ", b"".join(recipes)))
 
 
 def main() -> int:

@@ -10,7 +10,8 @@ anywhere on or near it) to start a round at hole 1.
 
 **Hold** the activate key on the course instead to play the nearest settler 1v1 (or a companion: any grown-up,
 friendly person within about 28 m). You putt first on every hole, then they play it; the lowest total over the 18
-wins. How true their putts are is `[Opponent] fSkill` in the ini.
+wins. They're invisible while you play (`[Opponent] bHide=0` has them stand by their ball instead); how true their
+putts are is `[Opponent] fSkill` in the ini.
 
 - **Aim:** look where you want the ball to go; the green line shows the line you're starting it on.
 - **Putt:** hold the left mouse button, pull the mouse back for power (the meter at the bottom), let go.
