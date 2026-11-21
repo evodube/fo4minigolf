@@ -299,6 +299,15 @@ namespace mg
 			return;  // (menus, the Pip-Boy, the workshop: everything holds still)
 		}
 		_clock += dt;
+		// a round ended by a loading screen: its free camera switched off now the game's back
+		if (_cameraOffAfterLoad && !menus::Open(menus::kLoading)) {
+			_cameraOffAfterLoad = false;
+			if (!_playing && InFreeCamera()) {
+				if (auto* camera = RE::PlayerCamera::GetSingleton()) {
+					camera->ToggleFreeCameraMode(false);
+				}
+			}
+		}
 		_scanTimer -= dt;
 		if (_scanTimer <= 0.0f) {
 			_scanTimer = kScanEvery;
@@ -698,9 +707,10 @@ namespace mg
 		const golf::Vec3 stand{ ball.x + side.x * 16.0 - _aimDir.x * 4.0, ball.y + side.y * 16.0 - _aimDir.y * 4.0, ball.z - Settings::Get().spec.ballRadius };
 		const auto       at = ToWorld(frame, stand);
 		const auto       look = ToWorld(frame, ball) - at;
-		const float      heading = std::atan2(look.x, look.y) / kDegToRad;
-		Papyrus::SetPosition(player, at);
-		Papyrus::SetAngle(player, 0.0f, 0.0f, heading);
+		// moved directly, not with Papyrus' SetPosition: on the player that is a teleport (a loading screen, and the free
+		// camera the round is played in doesn't come back from it: a black screen)
+		player->SetPosition(at, true);
+		player->data.angle.z = std::atan2(look.x, look.y);
 	}
 
 	// ---------------------------------------------------------------- the course in the world
@@ -1045,6 +1055,10 @@ namespace mg
 		Audio::SetListenerYaw(0.0f, false);
 		HoldPlayerView();
 		_haveEntryView = false;
+		if (menus::Open(menus::kLoading)) {
+			_cameraOffAfterLoad = true;  // (switching the free camera off under a loading screen leaves the view black)
+			return;
+		}
 		if (InFreeCamera()) {
 			if (auto* camera = RE::PlayerCamera::GetSingleton()) {
 				camera->ToggleFreeCameraMode(false);

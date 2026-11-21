@@ -66,7 +66,7 @@ MATERIALS = {
     "Lawn": ("Landscape/Ground/DriedGrass01", 256.0, None),
     "Paving": ("Landscape/Roads/Cobblestone01Landscape", 96.0, None),
     "Signs": ("fo4minigolf/Signs", 0.0, None),     # UVs set by hand
-    "Sand": ("Landscape/Ground/CoastSandDry01", 96.0, None),
+    "Sand": ("fo4minigolf/Sand", 64.0, None),  # our own: bright bunker sand (the game's beach sand is grey)
     # the set pieces (props.py)
     "Brick": ("Architecture/Buildings/BricksDarkRed01", 128.0, "Architecture/Buildings/Bricks01"),
     "Stone": ("Architecture/Buildings/ChurchStoneWall01", 128.0, None),
@@ -565,6 +565,10 @@ class Path:
             return 0.0
         return (self.at(s + ds)[2] - self.at(s - ds)[2]) / (2 * ds)
 
+    def curvature_smooth(self, s, width=45.0, n=9):
+        """the curvature averaged over +-width along the path (eases a bend's banking in and out)"""
+        return sum(self.curvature(s + width * (2.0 * i / (n - 1) - 1.0)) for i in range(n)) / n
+
     def sdf(self, x, y, half):
         best = 1e18
         for (ax, ay), (bx, by) in zip(self.pts, self.pts[1:]):
@@ -744,11 +748,18 @@ class Hole:
         return h
 
     def banked(self, f, bank=15.0):
-        """like along, with the curves banked: the outside of a bend raised (by bank x the curvature x d), as a real
-        course's banked turns are"""
+        """like along, with the curves banked as a real course's are: the outside of a bend raised, smoothly - across
+        the lane a curve rising from nothing at the inside edge (no crease), along it easing in and out over the
+        bend (no step where a curve starts). Only ever raised: never below the deck."""
+        half = self.half
+
         def h(x, y):
             s, d = self.path.project(x, y)
-            return f(s, d) + max(0.0, -d * self.path.curvature(s) * bank)  # only ever raised: never below the deck
+            k = self.path.curvature_smooth(s)
+            if abs(k) < 1e-6:
+                return f(s, d)
+            u = min(max((half - math.copysign(1.0, k) * d) / (2.0 * half), 0.0), 1.3)  # 0 inside edge .. 1 outside
+            return f(s, d) + bank * abs(k) * half * u * u
         return h
 
     def z(self, s, d=0.0):
@@ -769,8 +780,32 @@ class Hole:
         self.sand = list(zip(polys, specs))
         return polys
 
-    def lay_sand(self):
+    def cut(self, green, poly, tag):
+        """a clean hole of the polygon's shape out of the carpet: a boolean cut (applied at export), not the grid's
+        square cells"""
+        bm = bmesh.new()
+        ring = list(ccw([(x, y) for x, y in poly]))
+        bot = [bm.verts.new((x, y, -100.0)) for x, y in ring]
+        top = [bm.verts.new((x, y, 200.0)) for x, y in ring]
+        bm.faces.new(list(reversed(bot)))
+        bm.faces.new(top)
+        for k in range(len(ring)):
+            j = (k + 1) % len(ring)
+            bm.faces.new((bot[k], bot[j], top[j], top[k]))
+        bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+        cutter = new_object(self.tag(f"{tag}Cutter"), bm, self.coll, None, mg_hole=self.n, mg_hidden=1)
+        cutter.display_type = "WIRE"
+        cutter.hide_render = True
+        mod = green.modifiers.new(tag, "BOOLEAN")
+        mod.operation = "DIFFERENCE"
+        mod.object = cutter
+        mod.solver = "EXACT"
+        mod.use_hole_tolerant = True
+
+    def lay_sand(self, green=None):
         for i, (poly, (s, d, rx, ry, deg)) in enumerate(getattr(self, "sand", [])):
+            if green is not None:
+                self.cut(green, poly, f"Bunker{i}")
             cx, cy = self.p(s, d)
             _, _, a = self.path.at(s)
             a += math.radians(deg)
@@ -785,12 +820,12 @@ class Hole:
     def lane(self, h=None, mat="Turf", surface="green", holes=(), grid=GRID, rails=True, name="Green"):
         if h is not None:
             self.h = h
-        cut = list(holes) + [p for p, _ in getattr(self, "sand", [])]
-        g = ground(self.tag(name), self.poly, self.h, self.z0, self.coll, mat, surface, self.n, cut,
-                   min(grid, 5.0) if getattr(self, "sand", None) else grid)
+        g = ground(self.tag(name), self.poly, self.h, self.z0, self.coll, mat, surface, self.n, (), grid)
+        for i, poly in enumerate(holes):
+            self.cut(g, poly, f"Cut{i}")  # (the water below shows through)
         if rails:
             rail(self.tag(name + "Rail"), self.poly, self.h, self.z0, DECK, self.coll, self.rails, self.n, cap=self.trim)
-        self.lay_sand()
+        self.lay_sand(g)
         return g
 
     def section(self, s, d=0.0):

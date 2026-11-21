@@ -426,6 +426,19 @@ def canvas(out, name):
     write_set(out, name, c, weave, 2.0, 0.03, 0.1)
 
 
+def sand(out, name):
+    """bunker sand: warm, fine grains, a few darker and paler ones, raked furrows faintly showing"""
+    rng = np.random.default_rng(11)
+    yy, xx = np.mgrid[0:S, 0:S]
+    grain = rng.random((S, S))
+    fine = noise(S, 0.8)
+    rake = 0.5 + 0.5 * np.sin(yy / S * 2 * math.pi * 24 + fbm(S, 120, 3) * 3.0)
+    c = colour((214, 190, 140))[None, None, :] * (0.82 + 0.22 * fine[..., None]) * (0.94 + 0.08 * rake[..., None])
+    c = mix(c, colour((150, 120, 84))[None, None, :], (grain > 0.97)[..., None] * 0.7)
+    c = mix(c, colour((240, 228, 200))[None, None, :], (grain < 0.03)[..., None] * 0.6)
+    write_set(out, name, c, fine * 0.6 + rake * 0.4, 3.0, 0.05, 0.15)
+
+
 def solid(out, name, rgb, spec=0.3, gloss=0.6):
     """one flat colour (lamps, neon tubes, flames): a little texture so it isn't dead flat"""
     c = colour(rgb)[None, None, :] * (0.94 + 0.06 * fbm(S, 64, 3)[..., None])
@@ -443,6 +456,7 @@ def main():
         "Turf": lambda: turf(out, "Turf"),
         # set pieces' materials the game has no plain tileable texture for
         "Rubber": lambda: rubber_mat(out, "Rubber"),
+        "Sand": lambda: sand(out, "Sand"),
         "DarkMetal": lambda: steel(out, "DarkMetal", (62, 64, 66), 0.45),
         "Chrome": lambda: steel(out, "Chrome", (196, 198, 200), 0.85),
         "Olive": lambda: painted_steel(out, "Olive", (86, 92, 56)),

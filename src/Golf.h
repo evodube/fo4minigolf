@@ -145,7 +145,8 @@ namespace mg
 		};
 		std::vector<Placed> _placed;
 		float               _scanTimer{ 0.0f };
-		bool                _toldHowToPlay{ false };  // the first time you're near a course: how to play, once
+		bool                _toldHowToPlay{ false };
+		bool                _cameraOffAfterLoad{ false };  // the free camera still to switch off (LeaveCamera under a loading screen)  // the first time you're near a course: how to play, once
 
 		// ---- your round
 		std::atomic<bool>          _playing{ false };
