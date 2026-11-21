@@ -356,13 +356,13 @@ namespace mg
 			_pick->idle += dt;
 			auto  course = _pick->course.get();
 			auto* player = RE::PlayerCharacter::GetSingleton();
-			bool  near = false;
+			bool  inReach = false;
 			if (course && player && !_pick->who.empty()) {
 				if (auto first = _pick->who[_pick->sel].get()) {
-					near = (first->data.location - player->data.location).Length() < Settings::Get().oppRange + 600.0f;
+					inReach = (first->data.location - player->data.location).Length() < Settings::Get().oppRange + 600.0f;
 				}
 			}
-			if (_playing || !course || !near || _pick->idle > 20.0f || IsGamePaused()) {
+			if (_playing || !course || !inReach || _pick->idle > 20.0f || IsGamePaused()) {
 				ClosePick();
 			}
 		}
