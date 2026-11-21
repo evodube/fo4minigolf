@@ -956,22 +956,13 @@ namespace mg
 			_plan.reset();
 			const bool   moving = !_course.holes[_hole].obstacles.empty();
 			const double at = _planFrom + _planLead + shot.wait;
-			if (at < _clock - 0.05 && moving && _planTries < 3) {
+			if (at < _clock - 0.05 && moving && _planTries < 5) {
 				++_planTries;  // worked out too slowly: the obstacles have moved on. Again, further ahead
 				PlanOpponentShot();
 				return;
 			}
 			_planTries = 0;
-			// not quite the physics' best: off a little in line and weight, by their skill
-			static std::mt19937              rng{ std::random_device{}() };
-			std::normal_distribution<double> n(0.0, 1.0);
-			const double                     skill = Settings::Get().oppSkill;
-			const double                     da = n(rng) * (0.3 + (1.0 - skill) * 3.5) * kDegToRad;
-			const double                     ds = std::clamp(1.0 + n(rng) * (0.02 + (1.0 - skill) * 0.12), 0.6, 1.4);
-			const double                     c = std::cos(da), s = std::sin(da);
-			shot.dir = { shot.dir.x * c - shot.dir.y * s, shot.dir.x * s + shot.dir.y * c };
-			shot.speed = std::min(shot.speed * ds, Settings::Get().spec.maxSpeed);
-			_oppShot = shot;
+			_oppShot = shot;  // (already off a little by their skill: Bot::Settler)
 			_strikeAt = std::max(at, _clock + 0.6);
 			_aimDir = shot.dir;
 			Frame frame;
@@ -1000,24 +991,26 @@ namespace mg
 		_plan = plan;
 		const golf::Hole* hole = &_course.holes[_hole];
 		const bool        moving = !hole->obstacles.empty();
-		_planFrom = _clock;
+		_planFrom = _clock;  // (with moving obstacles, late means a mistimed putt: worked out again, further ahead)
 		_planLead = (moving ? 3.0 : 1.8) + 2.5 * _planTries;
 		const double        lead = _planLead;
 		const golf::Spec    spec = Settings::Get().spec;
-		const std::uint32_t seed = _planSeed++;
+		const double        skill = Settings::Get().oppSkill;
+		const std::uint32_t seed = _planSeed++ ^ static_cast<std::uint32_t>(NowMs());
 		golf::Sim           copy = *_sim;
-		std::thread([plan, copy = std::move(copy), hole, spec, lead, seed, moving]() mutable {
+		std::thread([plan, copy = std::move(copy), hole, spec, lead, seed, skill]() mutable {
+			golf::Bot bot(*hole, spec);
 			try {
 				copy.Step(lead);
-				golf::Bot bot(*hole, spec);
 				const int threads = std::clamp(static_cast<int>(std::thread::hardware_concurrency()) - 2, 1, 12);
-				plan->shot = bot.Choose(copy, moving ? 36 : 48, 10, seed, threads);
+				plan->shot = bot.Settler(copy, skill, seed, threads);
 			} catch (...) {
 				plan->shot = {};
 			}
 			if (plan->shot.speed <= 0.0) {
-				plan->shot.dir = { 1.0, 0.0 };
-				plan->shot.speed = spec.maxSpeed * 0.3;
+				plan->shot.dir = bot.Toward(copy.Pos());  // (the cup's way, at a firm putt)
+				plan->shot.speed = spec.maxSpeed * 0.35;
+				plan->shot.wait = 0.0;
 			}
 			plan->done = true;
 		}).detach();

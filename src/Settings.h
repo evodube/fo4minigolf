@@ -34,7 +34,7 @@ namespace mg
 		bool  guideFlipY{ true };       // (if the line shows up mirrored top to bottom, set 0)
 
 		// [Opponent] a settler played 1v1 (hold the activate key on the course)
-		float oppSkill{ 0.6f };      // 0..1: how true their putts are (1: the physics' own best shot, near enough)
+		float oppSkill{ 0.5f };      // 0..1: how true their putts are (1: the physics' own best shot, near enough)
 		float oppRange{ 2000.0f };   // how near you someone has to be to be asked (game units)
 		bool  oppHidden{ true };     // they're invisible while the round lasts (their score still shows)
 

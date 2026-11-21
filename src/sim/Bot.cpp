@@ -183,8 +183,75 @@ namespace golf
 		return s;
 	}
 
-	Shot Bot::Choose(const Sim& a_sim, int a_dirs, int a_speeds, std::uint32_t a_seed, int a_threads) const
+	Vec2 Bot::Toward(Vec3 a_pos) const
 	{
+		// the lowest of the field round the ball, a little way out (past the cell it's in)
+		Vec2   best{ 1.0, 0.0 };
+		double low = 1e18;
+		for (const double r : { 10.0, 18.0 }) {
+			for (int k = 0; k < 48; ++k) {
+				const double a = k / 48.0 * 6.283185307179586;
+				const Vec2   d{ std::cos(a), std::sin(a) };
+				const double v = Distance({ a_pos.x + d.x * r, a_pos.y + d.y * r, a_pos.z });
+				if (v < low) {
+					low = v;
+					best = d;
+				}
+			}
+			if (low < 1e9) {
+				break;
+			}
+		}
+		return best;
+	}
+
+	Shot Bot::Settler(const Sim& a_sim, double a_skill, std::uint32_t a_seed, int a_threads) const
+	{
+		const Vec3   from = a_sim.Pos();
+		const double before = Distance(from);
+		const int    dirs = _hole->obstacles.empty() ? 48 : 36;
+		// the cup's way: within about 100 degrees of the line along the ground to it (banks off the rails still in)
+		Shot best = Choose(a_sim, dirs, 10, a_seed, a_threads, -0.17);
+		if (best.end != BallState::kInCup && !(best.score < before)) {
+			best = Choose(a_sim, dirs, 10, a_seed + 7, a_threads);  // (nothing that way gains: anything that does)
+		}
+		if (best.end != BallState::kInCup && !(best.score < before)) {
+			// still nothing: a firm putt straight down the line to the cup
+			const Vec2 to = Toward(from);
+			best = Try(a_sim, to, std::clamp(before * 1.4, 60.0, _spec.maxSpeed * 0.7), 0.0);
+		}
+		// their miss: off line and weight by skill, kept only if it still gains ground and stays out of trouble
+		a_skill = std::clamp(a_skill, 0.0, 1.0);
+		std::uint32_t rng = a_seed * 747796405u + 2891336453u;
+		const auto    gauss = [&]() {
+            double s = 0.0;  // (near enough normal: the sum of four uniforms)
+            for (int i = 0; i < 4; ++i) {
+                s += (Next(rng) % 10001) / 10000.0;
+            }
+            return (s - 2.0) * 1.732;
+		};
+		const double aimSigma = (0.5 + (1.0 - a_skill) * 10.0) * 0.017453292519943295;
+		const double speedSigma = 0.04 + (1.0 - a_skill) * 0.35;
+		const double gain = before - (best.end == BallState::kInCup ? 0.0 : Distance(best.rest));
+		for (int tries = 0; tries < 10; ++tries) {
+			const double da = gauss() * aimSigma;
+			const double ds = std::clamp(1.0 + gauss() * speedSigma, 0.6, 1.4);
+			const double c = std::cos(da), s = std::sin(da);
+			const Vec2   dir{ best.dir.x * c - best.dir.y * s, best.dir.x * s + best.dir.y * c };
+			const Shot   t = Try(a_sim, dir, std::min(best.speed * ds, _spec.maxSpeed), best.wait);
+			if (t.end == BallState::kWater || t.end == BallState::kOut) {
+				continue;
+			}
+			if (t.end == BallState::kInCup || Distance(t.rest) < before - std::max(2.0, gain * 0.15)) {
+				return t;  // a miss, but a fair one: still nearer the cup
+			}
+		}
+		return best;
+	}
+
+	Shot Bot::Choose(const Sim& a_sim, int a_dirs, int a_speeds, std::uint32_t a_seed, int a_threads, double a_minDot) const
+	{
+		const Vec2 toward = a_minDot > -1.5 ? Toward(a_sim.Pos()) : Vec2{ 1.0, 0.0 };
 		std::uint32_t rng = a_seed * 2654435761u + 12345u;
 		const double  jitter = (Next(rng) % 1000) / 1000.0;
 		std::vector<double> waits{ 0.0 };
@@ -201,6 +268,9 @@ namespace golf
                 for (int d = a_first; d < a_dirs; d += threads) {
                     const double a = (d + jitter) / a_dirs * 6.283185307179586;
                     const Vec2   dir{ std::cos(a), std::sin(a) };
+                    if (dir.Dot(toward) < a_minDot) {
+                        continue;
+                    }
                     for (int k = 0; k < a_speeds; ++k) {
                         // speeds spread geometrically, 20 to full
                         const double speed = 20.0 * std::pow(_spec.maxSpeed / 20.0, k / double(a_speeds - 1));
@@ -238,6 +308,9 @@ namespace golf
 			const double ds = 1.0 + ((Next(rng) % 2001) / 1000.0 - 1.0) * 0.12;
 			const double c = std::cos(da), s = std::sin(da);
 			const Vec2   dir{ best.dir.x * c - best.dir.y * s, best.dir.x * s + best.dir.y * c };
+			if (best.speed <= 0.0 || dir.Dot(toward) < a_minDot) {
+				continue;
+			}
 			Shot         t = Try(a_sim, dir, std::min(best.speed * ds, _spec.maxSpeed), best.wait);
 			if (t.score < best.score) {
 				best = t;
