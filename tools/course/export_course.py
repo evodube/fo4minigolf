@@ -3,8 +3,8 @@
     <root>/Data/F4SE/Plugins/fo4minigolf/course.txt     the physics: ground, walls, obstacles (see src/sim/Course.h)
     <root>/Data/Meshes/fo4minigolf/Course.nif           everything that stands still, one shape per texture, with
                                                         Havok collision (a compressed mesh) to walk on
-    <root>/Data/Meshes/fo4minigolf/Obstacles/<name>.nif each moving obstacle, origin at its pivot
-    <root>/Data/Meshes/fo4minigolf/Ball.nif, Putter.nif
+                                                        and the moving obstacles as named nodes in it
+    <root>/Data/Meshes/fo4minigolf/Ball.nif, Putter.nif, Dot.nif (a guide dot)
 
 Everything is read from the scene, so moving something in Blender and exporting again moves it in the game and in the
 physics alike.
@@ -285,16 +285,34 @@ def export_course_nif(root_dir):
     col["pynRigidBody"] = "bhkPhysicsSystem"
     col["pynCollisionShapeType"] = "compressed_mesh"
 
+    # the moving obstacles: each its own node (its name the obstacle's, as course.txt has it), placed as at time 0,
+    # its mesh under it; the plugin turns, slides or lifts the node (src/Golf.cpp)
+    nodes = []
+    for ob in bpy.data.collections["MiniGolf"].all_objects:
+        if ob.get("mg_role") != "obstacle":
+            continue
+        node = bpy.data.objects.new(ob.name, None)
+        coll.objects.link(node)
+        node.matrix_world = ob.matrix_world.copy()
+        me = bpy.data.meshes.new_from_object(ob.evaluated_get(bpy.context.evaluated_depsgraph_get()))
+        mesh = bpy.data.objects.new(ob.name + "Mesh", me)
+        coll.objects.link(mesh)
+        mesh.parent = node
+        nodes += [node, mesh]
+
     root = _root(coll, "MiniGolfCourse", col)
     for s in shapes:
         s.parent = root
+    for n in nodes:
+        if n.type == "EMPTY":
+            n.parent = root
     bsx = bpy.data.objects.new("BSXFlags", None)
     coll.objects.link(bsx)
     bsx.parent = root
     bsx["BSXFlags_Name"] = "BSX"
     bsx["BSXFlags_Value"] = "HAVOK | COMPLEX"
     path = os.path.join(root_dir, "Data", "Meshes", "fo4minigolf", "Course.nif")
-    _export([root, bsx, col] + shapes, root, path)
+    _export([root, bsx, col] + shapes + nodes, root, path)
     return path, len(shapes), len(me.polygons)
 
 
@@ -332,6 +350,13 @@ def make_ball_and_putter():
         bmesh.ops.translate(bm, vec=(-2.5, -1.1 - 56 * math.sin(math.radians(18)), 2.4 + 56 * math.cos(math.radians(18))), verts=grip)
         B.finish(bm, "Corrugated")
         B.new_object("Putter", bm, coll, "Corrugated", mg_role="kit", mg_hidden=1)
+    if "Dot" not in bpy.data.objects:
+        # a guide dot: a flat disc lying on the green (the aiming line is a row of them)
+        bm = bmesh.new()
+        bmesh.ops.create_circle(bm, cap_ends=True, segments=10, radius=0.7)
+        bmesh.ops.translate(bm, vec=(0, 0, 0.15), verts=bm.verts)
+        B.finish(bm, "WhiteWood")
+        B.new_object("Dot", bm, coll, "WhiteWood", mg_role="kit", mg_hidden=1)
     return bpy.data.objects["Ball"], bpy.data.objects["Putter"]
 
 
@@ -345,11 +370,9 @@ def export(root_dir):
         f.write(text)
     out = {"course.txt": len(text)}
     out["Course.nif"] = export_course_nif(root_dir)
-    moving = [ob for ob in bpy.data.collections["MiniGolf"].all_objects if ob.get("mg_role") == "obstacle"]
-    for ob in moving:  # (listed first: exporting adds objects, which upsets a live iteration)
-        out[ob.name] = export_single(root_dir, ob, f"Obstacles/{ob.name}.nif")
     ball, putter = make_ball_and_putter()
     out["Ball"] = export_single(root_dir, ball, "Ball.nif")
     out["Putter"] = export_single(root_dir, putter, "Putter.nif")
+    out["Dot"] = export_single(root_dir, bpy.data.objects["Dot"], "Dot.nif")
     _scratch()
     return out

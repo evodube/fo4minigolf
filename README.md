@@ -3,8 +3,23 @@
 An 18-hole mini golf course for Fallout 4, built as one workshop object for a settlement, played with the plugin's
 own ball physics (like Playable Pool). Between holes you're moved to the next tee, so there's no walking.
 
-**Status: the course and its physics.** The F4SE plugin (placing the course, the shot camera, the HUD and scorecard,
-moving between holes) and the ESL come next.
+**Status: first playable version, not yet built.** The course, its physics, the F4SE plugin and the ESL are all here;
+the plugin hasn't been compiled yet.
+
+## Playing
+
+Build the **Mini Golf Course** from the workshop (Furniture > Mini Golf) and activate it to start a round at hole 1.
+
+- **Aim:** look where you want the ball to go; the dots show where it'll roll.
+- **Putt:** hold the left mouse button, pull the mouse back for power (the meter at the bottom), let go.
+- **Right mouse button / Q:** look down on the whole hole.
+- **X:** end the round.
+
+After each hole you're moved to the next tee, and the scorecard shows. A hole's over at 6 strokes. Water and out of
+bounds cost a stroke and put the ball back where you played from. The course's windmill, rotor, doors and the rest
+keep moving whether anyone's playing or not. Settings are in `Data\F4SE\Plugins\fo4minigolf.ini`.
+
+Needs F4SE, the Address Library, and F4SE Menu Framework for the HUD. Works on 1.10.163 (OG), NG and AE.
 
 ## The course
 
@@ -47,6 +62,13 @@ signs and the flags (`tools/course/make_textures.py`).
 - **A bot** (`src/sim/Bot`) plays shots on a copy of the physics and keeps the one ending nearest the cup, measured
   round the walls. The course test has it play all 18 holes; it'll be the settlers' brain later.
 
+## The plugin
+
+`src/`: `Golf.cpp` is the game (the courses' obstacles turned every frame, your round, the shot camera, the ball,
+putter and guide), `Hud.cpp` the HUD, and the rest is shared with Playable Pool, Wasteland Wagers and Amusement Games
+(the Present hook, the free camera hooks, the menus watch, the sounds through XAudio2). `tools/make_esl.py` writes
+`fo4minigolf.esl`; `tools/make_sounds.py` the sounds.
+
 ## Making the course
 
 Blender 5.2 with PyNifly; see `tools/course/`:
@@ -55,7 +77,7 @@ Blender 5.2 with PyNifly; see `tools/course/`:
 2. `build_course.py` builds all 18 holes from code: each hole is a centreline (straights and arcs) plus round
    greens, merged into one outline; rails, ramps, obstacles, cups, flags and signs follow from it.
 3. `anneal.py` (with `layout.py`) finds where each hole goes: nothing overlapping, room for paths, short walks.
-4. `export_course.py` writes `course.txt` (the physics), `Course.nif` (everything still, one shape per texture,
-   with Havok collision to walk on), one nif per moving obstacle, and the ball and putter.
+4. `export_course.py` writes `course.txt` (the physics), `Course.nif` (one shape per texture, Havok collision to walk
+   on, and each moving obstacle as a named node the plugin turns), and the ball, putter and guide dot.
 
 `tools/course/blend/minigolf.blend` is the built scene.
