@@ -1065,7 +1065,7 @@ def hole03(H):  # Nuka Alley: a banked S-bend climbing between giant Nuka-Cola b
     H.shape([("L", 40), ("A", 90, 55), ("A", 90, -55), ("L", 40)], 28, circles=[(40 + 2 * 90 * math.radians(55) + 40, 0, 32)])
     L = H.path.length
     H.lane(H.banked(lambda s, d: 12.0 * smoothstep(20.0, L - 40.0, s), 22.0))
-    for i, (s, d) in enumerate(((78, -11), (115, 13), (150, -12), (185, 10))):
+    for i, (s, d) in enumerate(((100, -11), (168, 11))):  # one in each bend
         z = H.z(s, d)
         with H.section(s, d):
             P.vanilla(H, f"Bottle{i}", "meshes/props/nukacolabottlefullprewar.nif", (0, 0, z - 0.3), height=34.0,
@@ -1130,18 +1130,29 @@ def hole07(H):  # Diner Dogleg: uphill into a banked 90 degree corner round the 
     H.cup = H.p(L)
 
 
-def hole08(H):  # The Volcano: round a bend to the cone in the round green; too soft and it rolls back down
+def hole08(H):  # Barrel Bumpers: down round the bend onto a round table of rusty oil drums that kick the ball back
     import props as P
     H.shape([("L", 80), ("A", 60, -60), ("L", 70)], 17)
     L = H.path.length
     c = H.p(L + 20)
     H.poly = outline([(H.path, 17), ("circle", c[0], c[1], 56)])
+    # down the lane into the bend, then the table: a gentle fall to the cup, as a pinball table tilts
+    e = H.p(L)
+    ux, uy = (c[0] - e[0]) / 20.0, (c[1] - e[1]) / 20.0  # (the table's axis: the lane's end to its middle, 20 apart)
+    lane = H.along(lambda s, d: 10.0 * (1.0 - smoothstep(30.0, 110.0, s)))
 
     def h(x, y):
-        r = math.hypot(x - c[0], y - c[1])
-        return 22.0 * (1.0 - smoothstep(12.0, 52.0, r)) - (1.5 * (1.0 - (r / 12.0) ** 2) if r < 12 else 0.0)
-    H.lane(h, grid=6.0)
-    H.cup = c
+        u = (x - c[0]) * ux + (y - c[1]) * uy  # along the table, from its middle
+        return lane(x, y) + 3.0 * (1.0 - smoothstep(-45.0, 40.0, u))
+    H.lane(h)
+    # the drums: one square in the way at the table's mouth, two either side of the line to the cup behind it -
+    # off one of them, or round them all; they kick a ball off harder than it came (restitution over 1)
+    for i, (s, d) in enumerate(((L + 4.0, 0.0), (L + 27.0, -17.0), (L + 27.0, 17.0))):
+        x, y = H.p(s, d)
+        z = H.z0 + H.h(x, y)
+        P.vanilla(H, f"Drum{i}", "meshes/setdressing/metalbarrel/metalbarrel01.nif", (x, y, z - 0.3), height=14.0, deg=67.0 * i)
+        ring_walls(H.tag(f"DrumWall{i}"), H.coll, (x, y), 5.0, z - 1.0, 14.0, H.n, 1.15, segments=14)
+    H.cup = H.p(L + 47.0)
 
 
 def hole09(H):  # Vault Doors: two blast doors sliding across a long straight, a step down, a right turn to the green
