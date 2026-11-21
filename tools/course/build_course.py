@@ -66,14 +66,37 @@ MATERIALS = {
     "Lawn": ("Landscape/Ground/DriedGrass01", 256.0, None),
     "Paving": ("Landscape/Roads/Cobblestone01Landscape", 96.0, None),
     "Signs": ("fo4minigolf/Signs", 0.0, None),     # UVs set by hand
+    "Sand": ("Landscape/Ground/CoastSandDry01", 96.0, None),
+    # the set pieces (props.py)
+    "Brick": ("Architecture/Buildings/BricksDarkRed01", 128.0, "Architecture/Buildings/Bricks01"),
+    "Stone": ("Architecture/Buildings/ChurchStoneWall01", 128.0, None),
+    "CastleStone": ("Architecture/Unique/TheCastle/CastleStone01", 128.0, None),
+    "Siding": ("Architecture/Buildings/ResidentialSidingSm01", 96.0, None),
+    "Shingles": ("Architecture/Buildings/ResShingles01", 96.0, None),
+    "RoofMetal": ("Architecture/Buildings/ResRoofMetal01", 96.0, None),
+    "RedMetal": ("interiors/Industrial/MetalSiloPlatesRed01", 128.0, "interiors/Industrial/MetalSiloPlates01"),
+    "WhiteMetal": ("interiors/Industrial/MetalSiloPlatesWhite01", 128.0, "interiors/Industrial/MetalSiloPlates01"),
+    "TealMetal": ("interiors/Industrial/MetalSiloPlatesBlueGreen01", 128.0, "interiors/Industrial/MetalSiloPlates01"),
+    "Rust": ("interiors/Industrial/MetalSiloPlatesRust01", 96.0, None),
+    "YellowMetal": ("Architecture/Warehouse/WrhsMetalCorgYellow01", 96.0, None),
+    "Rubber": ("fo4minigolf/Rubber", 48.0, None),
+    "DarkMetal": ("fo4minigolf/DarkMetal", 64.0, None),
+    "Chrome": ("fo4minigolf/Chrome", 64.0, None),
+    "OliveMetal": ("fo4minigolf/Olive", 96.0, None),
+    "DarkWood": ("fo4minigolf/DarkWood", 64.0, None),
+    "Canvas": ("fo4minigolf/Canvas", 48.0, None),
+    "Glass": ("fo4minigolf/Glass", 96.0, None),
+    "Neon": ("fo4minigolf/Neon", 64.0, None),
+    "Lamp": ("fo4minigolf/Lamp", 64.0, None),
+    "Flame": ("fo4minigolf/Flame", 64.0, None),
 }
 
-THEME = {  # rails, trim
-    "junk": ("Corrugated", "Corrugated"),
-    "americana": ("WhiteWood", "Striped"),
-    "vault": ("VaultPanel", "Striped"),
-    "military": ("BlueMetal", "Corrugated"),
-    "glow": ("GlowRock", "GlowRock"),
+THEME = {  # rails, the cap along the rails' tops
+    "junk": ("Corrugated", "Rust"),
+    "americana": ("Brick", "Stone"),
+    "vault": ("VaultPanel", "YellowMetal"),
+    "military": ("OliveMetal", "Striped"),
+    "glow": ("GlowRock", "DarkMetal"),
 }
 
 _root = None
@@ -241,7 +264,8 @@ def inside(p, poly):
     return c
 
 
-def rail(name, path, hfunc, z0, zbottom, coll, mat, hole, closed=True, height=RAIL_H, thick=RAIL_T, rest=0.6, outward=True):
+def rail(name, path, hfunc, z0, zbottom, coll, mat, hole, closed=True, height=RAIL_H, thick=RAIL_T, rest=0.6, outward=True,
+         cap=None):
     """A rail along a path (local xy): its inner face on the path, thick outwards (to the right of a ccw polygon's
     edges = outside), its top height above the ground's height there."""
     pts = resample(ccw(path) if closed else path, 12.0, closed)
@@ -278,7 +302,30 @@ def rail(name, path, hfunc, z0, zbottom, coll, mat, hole, closed=True, height=RA
         bm.faces.new(ring[0][::-1][:4])
         bm.faces.new(ring[-1][:4])
     finish(bm, mat)
-    return new_object(name, bm, coll, mat, mg_role="wall", mg_rest=rest, mg_hole=hole)
+    ob = new_object(name, bm, coll, mat, mg_role="wall", mg_rest=rest, mg_hole=hole)
+    if cap:
+        # the cap: a moulded board along the top, a little proud of both faces, its edges chamfered
+        prof = [(-1.0, -0.6), (-1.0, 0.8), (-0.4, 1.5), (thick + 0.4, 1.5), (thick + 1.0, 0.8), (thick + 1.0, -0.6)]
+        bm = bmesh.new()
+        rings = []
+        for i, p in enumerate(pts):
+            p = Vector(p)
+            unit = normals[i].normalized() if normals[i].length > 1e-6 else Vector((1, 0))
+            k = normals[i].length
+            top = z0 + hfunc(p.x, p.y) + height
+            rings.append([bm.verts.new((p.x + unit.x * s * k, p.y + unit.y * s * k, top + h)) for s, h in prof])
+        for i in range(n if closed else n - 1):
+            a, b = rings[i], rings[(i + 1) % n]
+            for j in range(len(prof) - 1):
+                bm.faces.new((a[j], b[j], b[j + 1], a[j + 1]))
+        if not closed:
+            bm.faces.new(list(reversed(rings[0])))
+            bm.faces.new(rings[-1])
+        finish(bm, cap)
+        for f in bm.faces:
+            f.smooth = True
+        new_object(name + "Cap", bm, coll, cap, mg_role="visual", mg_hole=hole, mg_nocol=1)
+    return ob
 
 
 def box(name, coll, center, size, mat, role="visual", hole=0, rot=0.0, **props):
@@ -512,6 +559,12 @@ class Path:
                 best = (d2, self.s[i] + t * math.sqrt(l2), math.copysign(math.sqrt(d2), side))
         return best[1], best[2]
 
+    def curvature(self, s, ds=4.0):
+        """the turn per unit length at s (+ = turning left); 0 past the ends"""
+        if s <= ds or s >= self.length - ds:
+            return 0.0
+        return (self.at(s + ds)[2] - self.at(s - ds)[2]) / (2 * ds)
+
     def sdf(self, x, y, half):
         best = 1e18
         for (ax, ay), (bx, by) in zip(self.pts, self.pts[1:]):
@@ -637,6 +690,8 @@ class Section:
         y += math.cos(a) * self.d
         m = Matrix.Translation((x, y, 0.0)) @ Matrix.Rotation(a, 4, "Z")
         for ob in set(bpy.data.objects) - self.before:
+            if ob.parent is not None:
+                continue  # moves with its parent
             if ob.type == "MESH" and ob.get("mg_role") != "obstacle":
                 ob.data.transform(m)
                 ob.data.update()
@@ -688,12 +743,54 @@ class Hole:
             return f(s, d)
         return h
 
+    def banked(self, f, bank=15.0):
+        """like along, with the curves banked: the outside of a bend raised (by bank x the curvature x d), as a real
+        course's banked turns are"""
+        def h(x, y):
+            s, d = self.path.project(x, y)
+            return f(s, d) + max(0.0, -d * self.path.curvature(s) * bank)  # only ever raised: never below the deck
+        return h
+
+    def z(self, s, d=0.0):
+        x, y = self.p(s, d)
+        return self.z0 + self.h(x, y)
+
+    def bunkers(self, specs):
+        """sand bunkers: (s, d, rx, ry, turn degrees) ovals on the lane; returns their polygons (cut out of the
+        turf), and lays the sand: a shallow dish, its rim tucked under the carpet's edge"""
+        polys = []
+        for s, d, rx, ry, deg in specs:
+            cx, cy = self.p(s, d)
+            _, _, a = self.path.at(s)
+            a += math.radians(deg)
+            polys.append([(cx + rx * math.cos(t) * math.cos(a) - ry * math.sin(t) * math.sin(a),
+                           cy + rx * math.cos(t) * math.sin(a) + ry * math.sin(t) * math.cos(a))
+                          for t in [math.tau * k / 20 for k in range(20)]])
+        self.sand = list(zip(polys, specs))
+        return polys
+
+    def lay_sand(self):
+        for i, (poly, (s, d, rx, ry, deg)) in enumerate(getattr(self, "sand", [])):
+            cx, cy = self.p(s, d)
+            _, _, a = self.path.at(s)
+            a += math.radians(deg)
+            ca, sa = math.cos(a), math.sin(a)
+
+            def h(x, y, cx=cx, cy=cy, ca=ca, sa=sa, rx=rx, ry=ry):
+                lx, ly = (x - cx) * ca + (y - cy) * sa, -(x - cx) * sa + (y - cy) * ca
+                q = (lx / rx) ** 2 + (ly / ry) ** 2
+                return self.h(x, y) - 0.3 - 2.4 * max(0.0, 1.0 - q)
+            ground(self.tag(f"Bunker{i}"), grown(poly, 6.0), h, self.z0, self.coll, "Sand", "sand", self.n, grid=4.0)
+
     def lane(self, h=None, mat="Turf", surface="green", holes=(), grid=GRID, rails=True, name="Green"):
         if h is not None:
             self.h = h
-        g = ground(self.tag(name), self.poly, self.h, self.z0, self.coll, mat, surface, self.n, holes, grid)
+        cut = list(holes) + [p for p, _ in getattr(self, "sand", [])]
+        g = ground(self.tag(name), self.poly, self.h, self.z0, self.coll, mat, surface, self.n, cut,
+                   min(grid, 5.0) if getattr(self, "sand", None) else grid)
         if rails:
-            rail(self.tag(name + "Rail"), self.poly, self.h, self.z0, DECK, self.coll, self.rails, self.n)
+            rail(self.tag(name + "Rail"), self.poly, self.h, self.z0, DECK, self.coll, self.rails, self.n, cap=self.trim)
+        self.lay_sand()
         return g
 
     def section(self, s, d=0.0):
@@ -711,24 +808,19 @@ class Hole:
         return right + list(reversed(left))
 
     def finish(self):
+        import props as P
         x, y = self.tee or self.p(18.0)
         self.tee = (x, y)
         _, _, ta = self.path.at(0.0)
         z = self.z0 + self.h(x, y)
-        bm = bmesh.new()
-        bmesh.ops.create_grid(bm, x_segments=1, y_segments=1, size=1.0)
-        bmesh.ops.scale(bm, vec=(9.0, 7.0, 1.0), verts=bm.verts)
-        bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Matrix.Rotation(ta, 3, "Z"), verts=bm.verts)
-        bmesh.ops.translate(bm, vec=(x, y, z + 0.15), verts=bm.verts)
-        finish(bm, "TeeMat")
-        new_object(self.tag("TeeMat"), bm, self.coll, "TeeMat", mg_role="visual", mg_hole=self.n)
+        P.tee_mat(self, x, y, z, ta)
         empty(self.tag("Tee"), self.coll, (x, y, z), self.n, mg_tee=1, mg_par=self.par, mg_name=self.name, mg_aim=ta)
         cx, cy = self.cup
         cz = self.z0 + self.h(cx, cy)
         cutter = cup(self.n, self.coll, cx, cy, cz)
         # the hole through the greens (not the water): a boolean cut, applied when the course is exported
         for ob in list(self.coll.objects):
-            if ob.type == "MESH" and ob.get("mg_role") == "ground" and ob.get("mg_surface", "green") != "water":
+            if ob.type == "MESH" and ob.get("mg_role") == "ground" and ob.get("mg_surface", "green") == "green":
                 mod = ob.modifiers.new("Cup", "BOOLEAN")
                 mod.operation = "DIFFERENCE"
                 mod.object = cutter
@@ -736,8 +828,8 @@ class Hole:
                 mod.use_hole_tolerant = True
         # the sign beside the tee, outside the rail, facing out to the side
         s = self.sign_side
-        sx, sy = self.p(10.0, s * (self.half + RAIL_T + 10.0))
-        sign(self.n, self.coll, sx, sy, DECK, ta + s * math.pi / 2)
+        sx, sy = self.p(10.0, s * (self.half + RAIL_T + 12.0))
+        P.sign(self.n, self.coll, sx, sy, DECK, ta + s * math.pi / 2)
 
     def obstacle(self, ob, motion, **numbers):
         ob["mg_role"] = "obstacle"
@@ -766,86 +858,104 @@ def blades(name, coll, count, size, offset, axis, mat, hole):
 # island green...
 
 
-def hole01(H):  # Welcome Mat: a keyhole, over a little hump into the round green
-    H.shape([("L", 200)], 17, circles=[(200, 0, 32)])
-    H.lane(H.along(lambda s, d: 3.0 * math.exp(-((s - 100.0) / 30.0) ** 2)))
-    H.cup = H.p(200)
-    for i, (s, d) in enumerate(((60, 30), (130, -30))):
+def hidden_wall(ob):
+    """a solid block for the physics and the game's collision, drawn by a set piece instead"""
+    ob["mg_hidden"] = 1
+    ob["mg_colproxy"] = 1
+    ob.display_type = "WIRE"
+    ob.hide_render = True
+    return ob
+
+
+def hole01(H):  # Welcome Mat: a dogleg left over a grassy mound, tyre stacks either side
+    H.shape([("L", 70), ("A", 70, 60), ("L", 60)], 18, circles=[(70 + 70 * math.pi / 3 + 60, 0, 30)])
+    L = H.path.length
+    H.lane(H.banked(lambda s, d: 4.5 * math.exp(-((s - 55.0) / 24.0) ** 2), 12.0))
+    import props as P
+    for i, (s, d) in enumerate(((40, 34), (100, -36))):
         with H.section(s, d):
-            cylinder(H.tag(f"TireStack{i}"), H.coll, (0, 0, DECK), 8.0, 14.0, "Corrugated", segments=12)
+            P.tire_stack(H, i, DECK, 3)
+    H.cup = H.p(L)
 
 
-def hole02(H):  # Old Windmill: straight through the mill when the sails let you, to a round green
-    H.shape([("L", 260)], 26, circles=[(262, 0, 36)])
-    H.lane()
-    z = H.z0
-    with H.section(150):
-        box(H.tag("MillLeft"), H.coll, (25, -32, z + 28), (50, 46, 64), "WhiteWood", "wall", H.n)
-        box(H.tag("MillRight"), H.coll, (25, 32, z + 28), (50, 46, 64), "WhiteWood", "wall", H.n)
-        box(H.tag("MillTunnelRoof"), H.coll, (25, 0, z + 42), (50, 20, 36), "WhiteWood", "visual", H.n)
-        bm = bmesh.new()  # the roof: a pyramid
-        bmesh.ops.create_cone(bm, cap_ends=True, segments=4, radius1=62, radius2=0, depth=40)
-        bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Matrix.Rotation(math.pi / 4, 3, "Z"), verts=bm.verts)
-        bmesh.ops.translate(bm, vec=(25, 0, z + 80), verts=bm.verts)
-        finish(bm, "Striped")
-        new_object(H.tag("MillRoof"), bm, H.coll, "Striped", mg_role="visual", mg_hole=H.n)
-        # the sails: four blades turning round a level axis along the lane, in front of the mill (origin at the hub)
-        bm = bmesh.new()
+def hole02(H):  # Old Windmill: up on a rise, straight through the mill when the sails let you, then a ramp down and
+    # round to the right to a green with a bunker
+    import props as P
+    H.shape([("L", 175), ("A", 60, -75), ("L", 70)], 24, circles=[(175 + 60 * math.radians(75) + 70, 0, 34)])
+    L = H.path.length
+    H.bunkers([(L + 14, 16, 8, 5, 20)])
+    H.lane(H.banked(lambda s, d: 22.0 * (1.0 - smoothstep(170.0, 235.0, s)), 12.0))
+    z = H.z(110)
+    with H.section(110):
+        hidden_wall(box(H.tag("MillLeft"), H.coll, (25, -32, (DECK + z + 60) / 2), (50, 46, z + 60 - DECK), "Concrete", "wall", H.n))
+        hidden_wall(box(H.tag("MillRight"), H.coll, (25, 32, (DECK + z + 60) / 2), (50, 46, z + 60 - DECK), "Concrete", "wall", H.n))
+        P.windmill(H, z, DECK)
+        bm = bmesh.new()  # the sails' main mesh: the four stocks (the lattice and canvas are its parts)
         for k in range(4):
             v = bmesh.ops.create_cube(bm, size=1.0)["verts"]
-            bmesh.ops.scale(bm, vec=(1.5, 9.0, 40.0), verts=v)
-            bmesh.ops.translate(bm, vec=(0, 0, -24.0), verts=v)
+            bmesh.ops.scale(bm, vec=(1.2, 1.2, 8.0), verts=v)
+            bmesh.ops.translate(bm, vec=(0, 0, -5.0), verts=v)
             bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Matrix.Rotation(k * math.pi / 2, 3, "X"), verts=v)
-        hubv = bmesh.ops.create_cone(bm, cap_ends=True, segments=12, radius1=4, radius2=4, depth=4)["verts"]
-        bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Matrix.Rotation(math.pi / 2, 3, "Y"), verts=hubv)
-        finish(bm, "Striped")
-        sails = new_object(H.tag("MillSails"), bm, H.coll, "Striped", mg_hole=H.n)
+        finish(bm, "DarkWood")
+        sails = new_object(H.tag("MillSails"), bm, H.coll, "DarkWood", mg_hole=H.n)
         sails.location = (-4.0, 0.0, z + 46.0)
         # blade 0 hangs straight down at time 0; the walls across the tunnel's mouth are there while a blade is down
         H.obstacle(sails, "wheel", period=8.0, phase=0.0, blades=4, half=11.0, axis=0.0)
         wall_path(H.tag("MillSailsWall"), H.coll, [(-6.0, -11.0), (-6.0, 11.0)], z, 20.0, H.n, 0.4, False, "owall",
                   mg_obstacle=sails.name)
-    H.cup = H.p(268, 8)
+        P.windmill_sails(H, sails)
+    H.cup = H.p(L, -6)
 
 
-def hole03(H):  # Nuka Alley: an S-bend through giant bottles
-    H.shape([("L", 40), ("A", 110, 40), ("A", 110, -40), ("L", 40)], 30, circles=[(240, 0, 34)])
-    H.lane()
-    for i, (s, d) in enumerate(((70, -10), (95, 14), (120, -14), (140, 6), (165, -8), (185, 14))):
+def hole03(H):  # Nuka Alley: a banked S-bend climbing between giant Nuka-Cola bottles
+    import props as P
+    H.shape([("L", 40), ("A", 90, 55), ("A", 90, -55), ("L", 40)], 28, circles=[(40 + 2 * 90 * math.radians(55) + 40, 0, 32)])
+    L = H.path.length
+    H.lane(H.banked(lambda s, d: 12.0 * smoothstep(20.0, L - 40.0, s), 22.0))
+    for i, (s, d) in enumerate(((70, -10), (98, 14), (125, -14), (148, 6), (172, -8), (196, 14))):
+        z = H.z(s, d)
         with H.section(s, d):
-            cylinder(H.tag(f"Bottle{i}"), H.coll, (0, 0, H.z0), 4.5, 26.0, "Striped", segments=12)
-            cylinder(H.tag(f"BottleNeck{i}"), H.coll, (0, 0, H.z0 + 26.0), 2.0, 9.0, "Striped", segments=10)
-            ring_walls(H.tag(f"BottleWall{i}"), H.coll, (0, 0), 4.6, H.z0 - 2, 30.0, H.n, 0.55, segments=10)
-    H.cup = H.p(240)
+            P.nuka_bottle(H, i, z - 0.5)
+            ring_walls(H.tag(f"BottleWall{i}"), H.coll, (0, 0), 4.7, z - 2, 30.0, H.n, 0.55, segments=12)
+    H.cup = H.p(L)
 
 
-def hole04(H):  # Rust Ramp: up the ramp, then a left turn on the plateau to the round green
-    H.shape([("L", 170), ("A", 45, 90), ("L", 50)], 18, circles=[(H_len := 170 + 45 * math.pi / 2 + 50, 0, 30)])
-    H.lane(H.along(lambda s, d: 20.0 * smoothstep(60.0, 130.0, s)))
-    with H.section(H_len):
-        box(H.tag("BackWall"), H.coll, (38, 0, H.z0 + 36), (6, 60, 32), "Corrugated", "visual", H.n)
-    H.cup = H.p(H_len)
+def hole04(H):  # Rust Ramp: a steep ramp up onto a scrap-metal plateau, a hard left at the top, a bunker in the corner
+    H.shape([("L", 140), ("A", 45, 90), ("L", 55)], 18, circles=[(140 + 45 * math.pi / 2 + 55, 0, 30)])
+    L = H.path.length
+    H.bunkers([(L + 4, -18, 8, 5, 70)])
+    H.lane(H.banked(lambda s, d: 32.0 * smoothstep(45.0, 115.0, s), 10.0))
+    with H.section(L):
+        box(H.tag("BackWall"), H.coll, (38, 0, H.z(L) + 20), (6, 60, 30), "Corrugated", "visual", H.n)["mg_nocol"] = 0
+    H.cup = H.p(L, 8)
     H.sign_side = -1
 
 
-def hole05(H):  # Toxic Crossing: a dumbbell, round at both ends, with a plank bridge over the muck between
+def hole05(H):  # Toxic Crossing: a dumbbell, a humped plank bridge over the muck between the two round ends
     H.shape([("L", 280)], 30, circles=[(10, 0, 36), (272, 0, 36)])
     water = [H.strip(110, 180, -40, -9), H.strip(110, 180, 9, 40)]
-    H.lane(holes=water)
+    H.lane(H.along(lambda s, d: 10.0 * math.sin(math.pi * min(1.0, max(0.0, (s - 95.0) / 100.0))) ** 2), holes=water)
     for i, w in enumerate(water):
         ground(H.tag(f"Muck{i}"), grown(w, 6.0), flat, H.z0 - 3.0, H.coll, "Muck", "water", H.n)
+    import props as P
+    P.bridge(H, 95.0, 195.0, 9.0)
     H.tee = H.p(10)
     H.cup = H.p(272)
 
 
-def hole06(H):  # Vertibird: a lollipop, the rotor spinning over the big round green
-    H.shape([("L", 220)], 18, circles=[(160, 0, 70)])
-    H.lane()
-    z = H.z0
-    with H.section(160):
-        cylinder(H.tag("RotorMast"), H.coll, (0, 0, z), 6.0, 12.0, "BlueMetal", "visual", H.n, segments=12)
-        ring_walls(H.tag("RotorMastWall"), H.coll, (0, 0), 6.0, z - 2, 14.0, H.n, 0.5, segments=12)
-        rotor = blades(H.tag("Rotor"), H.coll, 4, (52.0, 5.0, 2.0), (32.0, 0, 0), "Z", "BlueMetal", H.n)
+def hole06(H):  # Vertibird: up a slope and round a right-hand bend into the big round green under the rotor
+    import props as P
+    H.shape([("L", 90), ("A", 50, -75), ("L", 110)], 18)
+    L = H.path.length
+    sc = L - 40.0
+    H.poly = outline([(H.path, 18), ("circle", *H.p(sc), 66)])
+    H.bunkers([(sc - 18, -48, 11, 7, 30)])
+    H.lane(H.banked(lambda s, d: 10.0 * smoothstep(20.0, 80.0, s), 10.0))
+    z = H.z(sc)
+    with H.section(sc):
+        P.rotor_head(H, z)
+        ring_walls(H.tag("RotorMastWall"), H.coll, (0, 0), 9.0, z - 2, 14.0, H.n, 0.5, segments=14)
+        rotor = blades(H.tag("Rotor"), H.coll, 4, (46.0, 2.0, 1.0), (31.0, 0, 0), "Z", "OliveMetal", H.n)
         rotor.location = (0.0, 0.0, z + 5.0)
         H.obstacle(rotor, "spin", period=-5.0, phase=0.0)
         for k in range(4):
@@ -854,35 +964,44 @@ def hole06(H):  # Vertibird: a lollipop, the rotor spinning over the big round g
             pts = [(6, -2.5), (58, -2.5), (58, 2.5), (6, 2.5)]
             wall_path(H.tag(f"RotorWall{k}"), H.coll, [(px * c - py * s, py * c + px * s) for px, py in pts], z - 1, 8.0,
                       H.n, 0.5, True, "owall", mg_obstacle=rotor.name)
-    H.cup = H.p(160, -0) if False else H.p(212)
+        P.rotor_blades(H, rotor)
+    H.cup = H.p(sc + 46)
     H.sign_side = 1
 
 
-def hole07(H):  # Diner Dogleg: a 60 degree bend round the diner
-    H.shape([("L", 130), ("A", 60, 60), ("L", 110)], 22, circles=[(130 + 60 * math.pi / 3 + 110, 0, 30)])
-    H.lane()
-    with H.section(100, 60):
-        box(H.tag("Diner"), H.coll, (-20, 10, DECK + 20), (90, 40, 40), "WhiteWood", "visual", H.n)
-        box(H.tag("DinerRoof"), H.coll, (-20, 10, DECK + 42), (98, 48, 4), "Striped", "visual", H.n)
-    H.cup = H.p(130 + 60 * math.pi / 3 + 110)
+def hole07(H):  # Diner Dogleg: uphill into a banked 90 degree corner round the diner, then down to the green
+    import props as P
+    H.shape([("L", 110), ("A", 55, 90), ("L", 100)], 22, circles=[(110 + 55 * math.pi / 2 + 100, 0, 30)])
+    L = H.path.length
+    H.lane(H.banked(lambda s, d: 12.0 * smoothstep(20.0, 100.0, s) - 7.0 * smoothstep(175.0, 235.0, s), 20.0))
+    with H.section(150, -92):
+        P.diner(H, DECK)
+        P.collision_box(H.tag("DinerBlock"), H.coll, H.n, (-20, 10, DECK + 18), (90, 40, 36))
+    H.cup = H.p(L)
 
 
-def hole08(H):  # The Volcano: a lollipop with the cone in the round green; too soft and it rolls back down
-    H.shape([("L", 200)], 17, circles=[(200, 0, 56)])
-    c = H.p(200)
+def hole08(H):  # The Volcano: round a bend to the cone in the round green; too soft and it rolls back down
+    import props as P
+    H.shape([("L", 80), ("A", 60, -60), ("L", 70)], 17)
+    L = H.path.length
+    c = H.p(L + 20)
+    H.poly = outline([(H.path, 17), ("circle", c[0], c[1], 56)])
 
     def h(x, y):
         r = math.hypot(x - c[0], y - c[1])
-        return 18.0 * (1.0 - smoothstep(12.0, 52.0, r)) - (1.5 * (1.0 - (r / 12.0) ** 2) if r < 12 else 0.0)
+        return 22.0 * (1.0 - smoothstep(12.0, 52.0, r)) - (1.5 * (1.0 - (r / 12.0) ** 2) if r < 12 else 0.0)
     H.lane(h, grid=6.0)
+    P.volcano_rocks(H, c, DECK)
     H.cup = c
 
 
-def hole09(H):  # Vault Doors: a long straight with two blast doors sliding across, to a round green
-    H.shape([("L", 280)], 22, circles=[(282, 0, 32)])
-    H.lane()
-    z = H.z0
-    for i, (s, period, phase) in enumerate(((110.0, 4.0, 0.0), (190.0, 5.0, 0.5))):
+def hole09(H):  # Vault Doors: two blast doors sliding across a long straight, a step down, a right turn to the green
+    import props as P
+    H.shape([("L", 220), ("A", 40, -90), ("L", 40)], 22, circles=[(220 + 40 * math.pi / 2 + 40, 0, 32)])
+    L = H.path.length
+    H.lane(H.banked(lambda s, d: 14.0 * (1.0 - smoothstep(180.0, 215.0, s)), 8.0))
+    for i, (s, period, phase) in enumerate(((80.0, 4.0, 0.0), (150.0, 5.0, 0.5))):
+        z = H.z(s)
         with H.section(s):
             door = box(H.tag(f"Door{i}"), H.coll, (0, 0, 0), (8.0, 34.0, 24.0), "VaultPanel", "obstacle", H.n)
             for v in door.data.vertices:
@@ -891,121 +1010,126 @@ def hole09(H):  # Vault Doors: a long straight with two blast doors sliding acro
             H.obstacle(door, "slide", period=period, phase=phase, dx=0.0, dy=20.0)
             wall_path(H.tag(f"DoorWall{i}"), H.coll, [(-4, -17), (4, -17), (4, 17), (-4, 17)], z - 1, 24.0, H.n, 0.4,
                       True, "owall", mg_obstacle=door.name)
-    H.cup = H.p(284)
+            P.vault_door(H, door)
+            P.vault_door_frame(H, i, z)
+    H.cup = H.p(L)
 
 
-def hole10(H):  # Tire Yard: a clover of three round greens full of bouncy tyres
+def hole10(H):  # Tire Yard: a ramp up to a clover of three round greens full of bouncy tyres
+    import props as P
     H.shape([("L", 180)], 20, circles=[(110, 26, 40), (150, -28, 40), (190, 10, 40)])
-    H.lane()
+    H.lane(H.along(lambda s, d: 16.0 * smoothstep(15.0, 65.0, s)))
+    m = P.Model(H.tag("Tires"), H.coll, H.n)
     for i, (s, d) in enumerate(((95, 20), (130, -20), (160, 30), (175, -32), (195, -6))):
-        with H.section(s, d):
-            bm = bmesh.new()
-            bmesh.ops.create_cone(bm, cap_ends=False, segments=16, radius1=9, radius2=9, depth=6)
-            bmesh.ops.translate(bm, vec=(0, 0, H.z0 + 3), verts=bm.verts)
-            finish(bm, "Corrugated")
-            new_object(H.tag(f"Tire{i}"), bm, H.coll, "Corrugated", mg_role="visual", mg_hole=H.n)
-            ring_walls(H.tag(f"TireWall{i}"), H.coll, (0, 0), 9.0, H.z0 - 2, 8.0, H.n, 0.85, segments=14)
+        x, y = H.p(s, d)
+        P.tire(m, x, y, H.z0 + 16.0 + 3.0, 9.0, 6.0)
+        ring_walls(H.tag(f"TireWall{i}"), H.coll, (x, y), 9.0, H.z0 + 14.0, 8.0, H.n, 0.85, segments=14)
+    m.build()
     H.cup = H.p(210, 30)
 
 
-def hole11(H):  # The Drop: down a narrow chute, round a bend at the bottom, into the round green
+def hole11(H):  # The Drop: from a high tee down a steep covered chute, round the bend at the bottom into the green
+    import props as P
     H.shape([("L", 150), ("A", 50, -90), ("L", 40)], 14, circles=[(150 + 50 * math.pi / 2 + 40, 0, 34)])
-    H.lane(H.along(lambda s, d: 28.0 * (1.0 - smoothstep(70.0, 130.0, s))))
-    with H.section(100):
-        box(H.tag("ChuteRoof"), H.coll, (0, 0, H.z0 + 50), (60, 36, 3), "VaultPanel", "visual", H.n)
+    H.lane(H.banked(lambda s, d: 40.0 * (1.0 - smoothstep(55.0, 135.0, s)), 18.0))
+    with H.section(95):
+        P.awning(H, 60.0, 40.0, H.z(95) + 46.0, DECK)
     H.cup = H.p(150 + 50 * math.pi / 2 + 40)
     H.sign_side = 1
 
 
-def hole12(H):  # Wrecking Ball: a hairpin, the ball swinging over the first straight
+def hole12(H):  # Wrecking Ball: a banked hairpin, the ball swinging over the first straight
+    import props as P
     H.shape([("L", 170), ("A", 50, 180), ("L", 110)], 20, circles=[(170 + 50 * math.pi + 110, 0, 30)])
-    H.lane()
+    H.lane(H.banked(lambda s, d: 0.0, 14.0))
     z = H.z0
     with H.section(100):
+        P.wrecking_crane(H, z)
         for s in (-1, 1):
-            box(H.tag(f"GantryPost{s}"), H.coll, (0, s * 34, z + 46), (5, 5, 100), "Corrugated", "visual", H.n)
-        box(H.tag("GantryBeam"), H.coll, (0, 0, z + 96), (6, 74, 5), "Corrugated", "visual", H.n)
+            P.collision_box(H.tag(f"GantryLeg{s}"), H.coll, H.n, (0, s * 36, z + 46), (20, 8, 100))
         bm = bmesh.new()
-        ball = bmesh.ops.create_uvsphere(bm, u_segments=16, v_segments=10, radius=9.0)["verts"]
-        bmesh.ops.translate(bm, vec=(0, 0, -84.0), verts=ball)
-        chain = bmesh.ops.create_cone(bm, cap_ends=True, segments=6, radius1=0.6, radius2=0.6, depth=76)["verts"]
-        bmesh.ops.translate(bm, vec=(0, 0, -38.0), verts=chain)
-        finish(bm, "Corrugated")
-        wb = new_object(H.tag("WreckingBall"), bm, H.coll, "Corrugated", mg_hole=H.n)
+        bmesh.ops.create_uvsphere(bm, u_segments=8, v_segments=6, radius=1.0)  # a stub: the ball and chain are parts
+        finish(bm, "DarkMetal")
+        wb = new_object(H.tag("WreckingBall"), bm, H.coll, "DarkMetal", mg_hole=H.n)
         wb.location = (0.0, 0.0, z + 94.0)
         H.obstacle(wb, "pendulum", axis=0.0, length=84.0, swing=28.0, period=3.4, phase=0.0)
         ring_walls(H.tag("WreckingBallWall"), H.coll, (0.0, 0.0), 9.0, z - 1, 18.0, H.n, 0.5, segments=12, role="owall",
                    mg_obstacle=wb.name)
+        P.wrecking_ball(H, wb)
     H.cup = H.p(170 + 50 * math.pi + 110)
     H.sign_side = -1
 
 
-def hole13(H):  # Fat Man Jump: up the ramp and over the muck to the island green
+def hole13(H):  # Fat Man Jump: up the kicker ramp and over the muck to the island green
+    import props as P
     H.path = Path([("L", 175)])
     H.half = 18.0
     # the lane: round at the tee, cut square at the ramp's lip, no rail across the lip
     start = [(18 * math.cos(a), 18 * math.sin(a)) for a in [math.pi / 2 + math.pi * k / 12 for k in range(13)]]
     H.poly = ccw([(175, -18), (175, 18)] + start)
-    H.h = H.along(lambda s, d: 14.0 * smoothstep(120.0, 170.0, s))
+    H.h = H.along(lambda s, d: 18.0 * smoothstep(115.0, 170.0, s))
     ground(H.tag("Green"), H.poly, H.h, H.z0, H.coll, "Turf", "green", H.n)
     open_rail = [(175, 18)] + start + [(175, -18)]
-    rail(H.tag("GreenRail"), open_rail, H.h, H.z0, DECK, H.coll, H.rails, H.n, closed=False)
+    rail(H.tag("GreenRail"), open_rail, H.h, H.z0, DECK, H.coll, H.rails, H.n, closed=False, cap=H.trim)
     # the island: a round green 40 past the lip, its rail open towards the ramp
     cx, r = 250.0, 36.0
     island = [(cx + r * math.cos(a), r * math.sin(a)) for a in [math.tau * k / 40 for k in range(40)]]
     ground(H.tag("Island"), island, flat, H.z0, H.coll, "Turf", "green", H.n)
     arc = [(cx + r * math.cos(a), r * math.sin(a)) for a in [math.radians(-145 + 290 * k / 30) for k in range(31)]]
-    rail(H.tag("IslandRail"), arc, flat, H.z0, DECK, H.coll, H.rails, H.n, closed=False)
-    ground(H.tag("Muck"), [(165, -44), (cx - 10, -44), (cx - 10, 44), (165, 44)], flat, H.z0 - 6.0, H.coll, "Muck", "water", H.n)
-    with H.section(60, 40):
-        box(H.tag("Bomb"), H.coll, (0, 0, DECK + 7), (34, 14, 14), "BlueMetal", "visual", H.n)
+    rail(H.tag("IslandRail"), arc, flat, H.z0, DECK, H.coll, H.rails, H.n, closed=False, cap=H.trim)
+    ground(H.tag("Muck"), [(165, -44), (cx - 10, -44), (cx - 10, 44), (165, 44)], flat, H.z0 - 3.0, H.coll, "Muck", "water", H.n)
+    with H.section(60, 42):
+        P.fat_man(H, DECK)
     H.cup = (cx + 6.0, 0.0)
 
 
-def hole14(H):  # Glowing Sea: a wide wavy lane over rolling ground, a patch of slag and a toxic pool
+def hole14(H):  # Glowing Sea: a wide wavy lane over rolling ground, a sand trap and a toxic pool
     H.shape([("A", 160, 30), ("A", 160, -60), ("A", 160, 30)], 40, circles=[(250, 0, 44)])
     L = H.path.length
-    H.h = H.along(lambda s, d: 5.0 * math.sin(s / 24.0) * math.cos(d / 20.0) * smoothstep(30, 60, s) * (1 - smoothstep(L - 60, L - 20, s)))
+    H.h = H.along(lambda s, d: 3.5 * (1.0 + math.sin(s / 24.0) * math.cos(d / 20.0)) * smoothstep(30, 60, s) * (1 - smoothstep(L - 60, L - 20, s)))  # (never below the deck)
     pool = [H.p(150 + 18 * math.cos(a / 12 * math.tau), -18 + 13 * math.sin(a / 12 * math.tau)) for a in range(12)]
-    slag = [H.p(90 + 24 * math.cos(a / 12 * math.tau), 16 + 16 * math.sin(a / 12 * math.tau)) for a in range(12)]
-    H.lane(holes=[pool, slag], grid=6.0)
+    H.bunkers([(90, 16, 22, 13, 10), (215, -26, 12, 8, -30)])
+    H.lane(holes=[pool], grid=6.0)
     ground(H.tag("Pool"), grown(pool, 8.0), flat, H.z0 - 3.0, H.coll, "Muck", "water", H.n)
-    ground(H.tag("Slag"), grown(slag, 7.0), H.h, H.z0 + 0.3, H.coll, "GlowRock", "slow", H.n)
     H.cup = H.p(255)
 
 
-def hole15(H):  # Castle Gate: through the gate, then a bend right to the round green
+def hole15(H):  # Castle Gate: up the ramp to the gatehouse, through the portcullis, round to the right in the courtyard
+    import props as P
     H.shape([("L", 170), ("A", 70, -50), ("L", 70)], 22, circles=[(170 + 70 * math.radians(50) + 70, 0, 30)])
-    H.lane()
-    z = H.z0
+    H.lane(H.banked(lambda s, d: 20.0 * smoothstep(40.0, 100.0, s), 10.0))
+    z = H.z(120)
     with H.section(120):
-        box(H.tag("CastleLeft"), H.coll, (0, -22, z + 22), (20, 22, 52), "WhiteWood", "wall", H.n)
-        box(H.tag("CastleRight"), H.coll, (0, 22, z + 22), (20, 22, 52), "WhiteWood", "wall", H.n)
-        box(H.tag("CastleArch"), H.coll, (0, 0, z + 40), (20, 24, 16), "WhiteWood", "visual", H.n)
+        hidden_wall(box(H.tag("CastleLeft"), H.coll, (0, -22, (DECK + z + 48) / 2), (20, 22, z + 48 - DECK), "Concrete", "wall", H.n))
+        hidden_wall(box(H.tag("CastleRight"), H.coll, (0, 22, (DECK + z + 48) / 2), (20, 22, z + 48 - DECK), "Concrete", "wall", H.n))
+        P.castle(H, z, DECK)
         for s in (-1, 1):
-            cylinder(H.tag(f"Tower{s}"), H.coll, (0, s * 40, DECK), 11.0, 74.0, "Striped", "visual", H.n, segments=12)
-        gate = box(H.tag("Portcullis"), H.coll, (0, 0, 0), (3.0, 24.0, 30.0), "Corrugated", "obstacle", H.n)
+            P.collision_cyl(H.tag(f"TowerBlock{s}"), H.coll, H.n, (0, s * 40, DECK), 11.0, z - DECK + 70)
+        gate = box(H.tag("Portcullis"), H.coll, (0, 0, 0), (1.0, 22.0, 2.0), "DarkMetal", "obstacle", H.n)
         for v in gate.data.vertices:
-            v.co.z += 15.0
+            v.co.z += 29.0
         gate.location = (-11.0, 0.0, z - 1)
         H.obstacle(gate, "lift", height=28.0, period=7.0, phase=0.0)
         wall_path(H.tag("PortcullisWall"), H.coll, [(-12, -12), (-10, -12), (-10, 12), (-12, 12)], z - 1, 30.0, H.n, 0.3,
                   True, "owall", mg_obstacle=gate.name)
+        P.portcullis(H, gate)
     H.cup = H.p(170 + 70 * math.radians(50) + 70)
 
 
-def hole16(H):  # Mr. Handy: a barbell, his three arms sweeping the big round green in the middle
-    H.shape([("L", 270)], 18, circles=[(140, 0, 62), (272, 0, 28)])
-    H.lane()
-    z = H.z0
-    with H.section(140):
-        bm = bmesh.new()
-        bmesh.ops.create_uvsphere(bm, u_segments=16, v_segments=10, radius=12.0)
-        bmesh.ops.translate(bm, vec=(0, 0, z + 14), verts=bm.verts)
-        finish(bm, "VaultPanel")
-        new_object(H.tag("HandyBody"), bm, H.coll, "VaultPanel", mg_role="visual", mg_hole=H.n)
+def hole16(H):  # Mr. Handy: a curving barbell, his three arms sweeping the big round green in the middle
+    import props as P
+    H.shape([("L", 60), ("A", 120, -40), ("L", 130)], 18)
+    L = H.path.length
+    mid = 140.0
+    H.poly = outline([(H.path, 18), ("circle", *H.p(mid), 62), ("circle", *H.p(L), 28)])
+    H.bunkers([(L + 2, 14, 7, 5, 90)])
+    H.lane(H.banked(lambda s, d: 6.0 * smoothstep(mid + 40, L - 10, s), 0.0))
+    z = H.z(mid)
+    with H.section(mid):
+        P.mr_handy(H, z)
         ring_walls(H.tag("HandyBodyWall"), H.coll, (0, 0), 9.0, z - 1, 10.0, H.n, 0.5, segments=12)
-        arms = blades(H.tag("HandyArms"), H.coll, 3, (36.0, 3.0, 3.0), (28.0, 0, 0), "Z", "Striped", H.n)
+        P.collision_cyl(H.tag("HandyBlock"), H.coll, H.n, (0, 0, z), 12.0, 30.0)
+        arms = blades(H.tag("HandyArms"), H.coll, 3, (16.0, 1.0, 1.0), (19.0, 0, 0), "Z", "Chrome", H.n)
         arms.location = (0.0, 0.0, z + 3.0)
         H.obstacle(arms, "spin", period=4.5, phase=0.0)
         for k in range(3):
@@ -1014,30 +1138,37 @@ def hole16(H):  # Mr. Handy: a barbell, his three arms sweeping the big round gr
             pts = [(10, -1.5), (46, -1.5), (46, 1.5), (10, 1.5)]
             wall_path(H.tag(f"HandyArmWall{k}"), H.coll, [(px * c - py * s, py * c + px * s) for px, py in pts], z - 1, 6.0,
                       H.n, 0.5, True, "owall", mg_obstacle=arms.name)
-    H.cup = H.p(272)
-
-
-def hole17(H):  # Zigzag: three sharp switchbacks
-    H.shape([("L", 60), ("A", 25, 70), ("L", 60), ("A", 25, -140), ("L", 60), ("A", 25, 70), ("L", 50)], 17,
-            circles=[(None, 0, 28)] if False else [])
-    L = H.path.length
-    H.poly = outline([(H.path, 17), ("circle", *H.p(L), 28)])
-    H.lane()
+        P.handy_arms(H, arms)
     H.cup = H.p(L)
 
 
-def hole18(H):  # Last Stop: a long sweeping curve up into the funnel
+def hole17(H):  # Zigzag: three switchbacks terraced down a hillside, a ramp down round each bend
+    H.shape([("L", 60), ("A", 25, 70), ("L", 60), ("A", 25, -140), ("L", 60), ("A", 25, 70), ("L", 50)], 17)
+    L = H.path.length
+    H.poly = outline([(H.path, 17), ("circle", *H.p(L), 28)])
+    a1 = 60 + 25 * math.radians(70)
+    b1 = a1 + 60
+    a2 = b1 + 25 * math.radians(140)
+    b2 = a2 + 60
+    a3 = b2 + 25 * math.radians(70)
+    H.lane(H.banked(lambda s, d: 36.0 - 12.0 * smoothstep(55.0, a1 + 5, s) - 12.0 * smoothstep(b1 - 5, a2 + 5, s)
+                    - 12.0 * smoothstep(b2 - 5, a3 + 5, s), 10.0))
+    H.cup = H.p(L)
+
+
+def hole18(H):  # Last Stop: a long banked sweep up into the funnel, a bunker guarding its mouth
     H.shape([("L", 60), ("A", 140, 70), ("L", 60)], 20)
     L = H.path.length
     c = H.p(L)
     H.poly = outline([(H.path, 20), ("circle", c[0], c[1], 44)])
+    H.bunkers([(L - 62, -10, 8, 5, 0)])
+    sweep = H.banked(lambda s, d: 16.0 * smoothstep(40.0, L - 50.0, s), 20.0)
 
     def h(x, y):
         r = math.hypot(x - c[0], y - c[1])
         if r < 44.0:
-            return 12.0 - 8.0 * (1.0 - (r / 44.0) ** 2)
-        s, _ = H.path.project(x, y)
-        return 12.0 * smoothstep(40.0, L - 50.0, s)
+            return 16.0 - 9.0 * (1.0 - (r / 44.0) ** 2)
+        return sweep(x, y)
     H.lane(h, grid=6.0)
     H.cup = c
 
@@ -1047,26 +1178,26 @@ BUILDERS = [hole01, hole02, hole03, hole04, hole05, hole06, hole07, hole08, hole
 
 # where each hole goes: its tee's position on the course and the way its frame is turned (maths angle, degrees).
 # Found by tools/course/anneal.py (nothing overlapping, room for paths between, each tee a short walk from the last
-# hole's cup), from the holes' shapes as built here.
+# hole's cup), from the holes' shapes as built here: MG_GAP=36 MG_HALF=650 MG_OVER=40, seed 11, 25000 steps.
 PLACEMENTS = {
-    1: (258.2, -329.4, 300),
-    2: (421.7, -408.7, 120),
-    3: (192.4, -184.8, 60),
-    4: (337.7, -33.2, 300),
-    5: (512.4, -49.5, 135),
-    6: (222.9, 129.9, 210),
-    7: (-106.8, 39.0, 105),
-    8: (-378.4, 335.5, 225),
-    9: (-502.7, 77.1, 270),
-    10: (-411.1, -215.2, 255),
-    11: (-347.1, -411.2, 30),
-    12: (-81.1, -321.3, 330),
-    13: (-56.1, -182.2, 75),
-    14: (-20.6, 158.4, 15),
-    15: (112.3, 347.2, 45),
-    16: (194.2, 532.0, 195),
-    17: (-141.5, 464.1, 225),
-    18: (-369.6, 222.8, 255),
+    1: (-163.9, 130.1, 60),
+    2: (-285.6, 319.7, 195),
+    3: (-566.3, 146.8, 270),
+    4: (-411.0, -293.5, 300),
+    5: (-122.0, -299.6, 45),
+    6: (74.2, 178.6, 120),
+    7: (391.7, 258.0, 45),
+    8: (46.5, 68.7, 240),
+    9: (-409.5, -171.8, 75),
+    10: (-130.5, 454.5, 180),
+    11: (-258.4, 228.2, 225),
+    12: (-273.7, -78.6, 255),
+    13: (185.1, -268.7, 90),
+    14: (179.1, 103.7, 60),
+    15: (320.1, 167.4, 300),
+    16: (298.4, -158.0, 330),
+    17: (537.8, -194.4, 75),
+    18: (592.8, -298.9, 225),
 }
 
 
@@ -1076,10 +1207,11 @@ def footprints():
     for num, *_ in HOLES:
         xs, ys = [], []
         for ob in bpy.data.collections[f"Hole{num:02d}"].objects:
-            if ob.type != "MESH" or ob.get("mg_hidden"):
+            if ob.type != "MESH" or (ob.get("mg_hidden") and not ob.get("mg_colproxy")):
                 continue
+            mw = ob.parent.matrix_basis @ ob.matrix_basis if ob.parent else ob.matrix_basis
             for v in ob.data.vertices:
-                p = ob.matrix_basis @ v.co
+                p = mw @ v.co
                 xs.append(p.x)
                 ys.append(p.y)
         out[num] = (round(min(xs)), round(max(xs)), round(min(ys)), round(max(ys)))
@@ -1201,6 +1333,8 @@ def build(root, placements=None):
     for num, H in built.items():
         m, a = hole_matrix(num, H.tee)
         for ob in H.coll.objects:
+            if ob.parent is not None:
+                continue
             if ob.type == "MESH" and ob.get("mg_role") != "obstacle":
                 ob.data.transform(m)  # bake: meshes keep identity transforms
                 ob.data.update()
@@ -1220,15 +1354,28 @@ def build(root, placements=None):
     # a paved pad under each hole, and a path from each cup to the next tee
     for i, pad in enumerate(pads):
         slab(f"Pad{i + 1:02d}", ground_coll, pad, DECK + 0.02 * (i % 5), DECK - 1.0, "Paving", "Paving")
-    for num in range(1, 18):
-        a, b = Vector(ends[num][1]), Vector(ends[num + 1][0])
-        d = b - a
-        if d.length < 1:
-            continue
-        side = Vector((-d.y, d.x)).normalized() * 17.0
-        quad = [tuple(a - side), tuple(b - side), tuple(b + side), tuple(a + side)]
-        slab(f"Path{num:02d}", ground_coll, quad, DECK + 0.15, DECK - 1.0, "Paving", "Paving")
-    return {"holes": len(HOLES), "objects": len(bpy.data.objects), "footprints": feet}
+    # (no paths from cup to tee: the game takes you to the next tee; a straight path would run under other holes)
+
+    # the park round the holes: lamp posts, benches, planting (the game's own props: dressing.py)
+    out = {"holes": len(HOLES), "objects": len(bpy.data.objects), "footprints": feet}
+    if os.environ.get("MG_NO_DRESSING"):
+        return out
+    import dressing
+    bpy.context.view_layer.update()
+    keep_out = list(pads)
+    for num, H in built.items():
+        for ob in H.coll.objects:
+            if ob.type == "MESH" and (ob.get("mg_nocol") or ob.get("mg_colproxy")) and not ob.parent:
+                pts = [tuple((ob.matrix_world @ v.co).xy) for v in ob.data.vertices]
+                if len(pts) >= 3:
+                    keep_out.append(convex_hull([(round(x, 1), round(y, 1)) for x, y in pts]))
+    tees = {}
+    for num, H in built.items():
+        m, a = hole_matrix(num, H.tee)
+        _, _, ta = H.path.at(0.0)
+        tees[num] = (ends[num][0], a + ta, H.sign_side)
+    out["dressing"] = dressing.dress(_root, keep_out, rounded(lawn, 120.0, 6), tees)
+    return out
 
 
 def preview(path, eye=(-700.0, -1150.0, 1050.0), target=(0.0, -40.0, 0.0), lens=35.0, size=(1600, 1000)):

@@ -369,7 +369,7 @@ namespace mg
 		Scan();
 		auto*              player = RE::PlayerCharacter::GetSingleton();
 		RE::TESObjectREFR* best = nullptr;
-		float              bestD = 2500.0f;  // (the course is 16.5 m across: from anywhere on it, or just by it)
+		float              bestD = 2500.0f;  // (the course is about 18.5 m across: from anywhere on it, or just by it)
 		for (auto& p : _placed) {
 			auto ref = p.ref.get();
 			if (!ref || !player) {

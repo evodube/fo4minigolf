@@ -122,6 +122,8 @@ namespace golf
 			return _spec.rollDecel * _spec.fastFactor;
 		case Surface::kSlow:
 			return _spec.rollDecel * _spec.slowFactor;
+		case Surface::kSand:
+			return _spec.rollDecel * _spec.sandFactor;
 		default:
 			return _spec.rollDecel;
 		}
@@ -284,8 +286,9 @@ namespace golf
 						a_events.push_back({ Event::Type::kWater, -1, -vn, _pos });
 						return;
 					}
-					const double bounce = -vn * _spec.landRestitution;
-					Vec3         tangent = OntoPlane(_vel, n) * 0.97;
+					const bool   sand = tri->surface == Surface::kSand;
+					const double bounce = sand ? 0.0 : -vn * _spec.landRestitution;
+					Vec3         tangent = OntoPlane(_vel, n) * (sand ? 0.35 : 0.97);
 					if (bounce < kSettleSpeed) {
 						_vel = tangent;
 						_ground = tri;

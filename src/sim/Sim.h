@@ -23,6 +23,7 @@ namespace golf
 		double rollDecel{ 38.0 };         // rolling resistance on carpet, units/s^2 (a 2 m/s putt rolls about 3.5 m)
 		double fastFactor{ 0.35 };        // rolling resistance on "fast" ground, times rollDecel
 		double slowFactor{ 4.0 };         // and on "slow" ground
+		double sandFactor{ 9.0 };         // and in a sand bunker
 		double landRestitution{ 0.35 };   // bounce when landing
 		double rimRestitution{ 0.45 };
 		double stopSpeed{ 1.5 };          // slower than this (and the slope can't move it): at rest

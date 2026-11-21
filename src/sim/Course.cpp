@@ -21,6 +21,8 @@ namespace golf
 				a_out = Surface::kFast;
 			} else if (a_word == "slow") {
 				a_out = Surface::kSlow;
+			} else if (a_word == "sand") {
+				a_out = Surface::kSand;
 			} else {
 				return false;
 			}

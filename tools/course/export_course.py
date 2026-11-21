@@ -219,13 +219,21 @@ def export_course_nif(root_dir):
     by_mat = {}
     solid = []
     for ob in bpy.data.collections["MiniGolf"].all_objects:
-        if ob.type != "MESH" or ob.get("mg_hidden") or ob.get("mg_role") in ("obstacle", "owall"):
+        if ob.type != "MESH":
+            continue
+        if ob.get("mg_colproxy"):
+            solid.append(ob)  # a plain block standing in for a detailed set piece in the game's collision
+            continue
+        if ob.get("mg_hidden") or ob.get("mg_role") in ("obstacle", "owall", "opart"):
             continue
         if not ob.data.materials:
             continue
         by_mat.setdefault(ob.data.materials[0].name, []).append(ob)
-        # walk-on collision: the deck, the platforms, the greens and everything big; not the little props
+        # walk-on collision: the lawn, the pads, the greens, the rails and everything big; not the detailed set
+        # pieces (mg_nocol: their collision is a plain block) nor the little props
         dims = ob.dimensions
+        if ob.get("mg_nocol"):
+            continue
         if ob.get("mg_role") in ("ground", "wall") or ob.name.startswith(("Deck", "Platform")) or max(dims) > 30:
             if ob.get("mg_surface") != "water":
                 solid.append(ob)
@@ -270,6 +278,17 @@ def export_course_nif(root_dir):
         coll.objects.link(mesh)
         mesh.parent = node
         nodes += [node, mesh]
+        # its detailed parts (props.attach): in the obstacle's own space, under the same node
+        inv = ob.matrix_world.inverted()
+        for part in bpy.data.objects:
+            if part.get("mg_role") != "opart" or part.get("mg_attach") != ob.name:
+                continue
+            pm = bpy.data.meshes.new_from_object(part.evaluated_get(bpy.context.evaluated_depsgraph_get()))
+            pm.transform(inv @ part.matrix_world)
+            po = bpy.data.objects.new(part.name + "Mesh", pm)
+            coll.objects.link(po)
+            po.parent = node
+            nodes.append(po)
 
     root = _root(coll, "MiniGolfCourse", col)
     for s in shapes:

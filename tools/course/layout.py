@@ -20,8 +20,8 @@ from shapely import affinity
 from shapely.geometry import LineString, Polygon
 from shapely.ops import unary_union
 
-HALF = 580.0   # the course fits in +-HALF (about 16.5 m square)
-GAP = 22.0     # between two holes: room for a path
+HALF = 650.0   # the course fits in +-HALF (about 18.5 m square)
+GAP = 36.0     # between two holes: room for a path, and no two holes (or their set pieces) touching
 
 
 def load(local_path, tris_path):

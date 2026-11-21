@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Makes the mini golf course's own textures: the hole signs and the mini golf carpet. The rest of the course uses the game's
+"""Makes the mini golf course's own textures: the hole signs, the mini golf carpet, and a few plain materials for the set
+pieces the game has no tileable texture of (rubber, steel, glass, canvas, lamps). The rest of the course uses the game's
 textures. (The other generators here, carpets, wood, metal and so on, are kept in case a texture the game doesn't
 have is ever wanted; main() doesn't call them, nor the flags', gone with the flags.)
 
@@ -392,13 +393,69 @@ def turf(out, name):
     write_set(out, name, c, height, 3.0, 0.07 + 0.05 * lay, 0.2)
 
 
+def rubber_mat(out, name):
+    """black rubber matting: a fine pebble texture"""
+    peb = noise(S, 1.6)
+    c = colour((30, 30, 31))[None, None, :] * (0.8 + 0.35 * peb[..., None]) * (0.92 + 0.12 * fbm(S, 120, 3)[..., None])
+    write_set(out, name, c, peb, 4.0, 0.06, 0.3)
+
+
+def steel(out, name, rgb, gloss=0.5, brushed=True):
+    """bare or dark steel: brushed streaks, a little grime"""
+    streak = noise(S, 2, aspect=(1.0, 0.02)) if brushed else noise(S, 2)
+    grime = smoothstep(0.55, 0.8, fbm(S, 200, 5))
+    c = colour(rgb)[None, None, :] * (0.85 + 0.25 * streak[..., None]) * (1 - 0.35 * grime[..., None])
+    write_set(out, name, c, streak * 0.2, 2.0, 0.6 - 0.3 * grime, gloss - 0.2 * grime)
+
+
+def glass(out, name):
+    """dark window glass with soft sky reflections"""
+    yy, xx = np.mgrid[0:S, 0:S]
+    sky = 0.5 + 0.5 * np.sin((xx * 0.6 + yy) / S * math.pi * 2)
+    c = mix(colour((22, 30, 38))[None, None, :], colour((90, 110, 124))[None, None, :], (sky * 0.5 + fbm(S, 300, 3) * 0.3)[..., None])
+    write_set(out, name, c, np.zeros((S, S)), 1.0, 0.9, 0.95)
+
+
+def canvas(out, name):
+    """sail canvas: a woven cream cloth, weathered"""
+    yy, xx = np.mgrid[0:S, 0:S]
+    weave = (0.5 + 0.25 * np.sin(xx * 1.6) + 0.25 * np.sin(yy * 1.6))
+    stain = smoothstep(0.5, 0.85, fbm(S, 180, 5))
+    c = colour((214, 204, 180))[None, None, :] * (0.85 + 0.15 * weave[..., None])
+    c = mix(c, colour((120, 104, 80))[None, None, :], stain * 0.5)
+    write_set(out, name, c, weave, 2.0, 0.03, 0.1)
+
+
+def solid(out, name, rgb, spec=0.3, gloss=0.6):
+    """one flat colour (lamps, neon tubes, flames): a little texture so it isn't dead flat"""
+    c = colour(rgb)[None, None, :] * (0.94 + 0.06 * fbm(S, 64, 3)[..., None])
+    write_set(out, name, c, np.zeros((S, S)), 1.0, spec, gloss)
+
+
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "..", "..", "dist", "Data", "Textures", "fo4minigolf")
     os.makedirs(out, exist_ok=True)
     # Everything else on the course uses the game's own textures (see build_course.py MATERIALS): only the signs
     # and the flags need text of their own.
-    signs(out, "Signs")
-    turf(out, "Turf")
+    only = sys.argv[2].split(",") if len(sys.argv) > 2 else None
+    jobs = {
+        "Signs": lambda: signs(out, "Signs"),
+        "Turf": lambda: turf(out, "Turf"),
+        # set pieces' materials the game has no plain tileable texture for
+        "Rubber": lambda: rubber_mat(out, "Rubber"),
+        "DarkMetal": lambda: steel(out, "DarkMetal", (62, 64, 66), 0.45),
+        "Chrome": lambda: steel(out, "Chrome", (196, 198, 200), 0.85),
+        "Olive": lambda: painted_steel(out, "Olive", (86, 92, 56)),
+        "DarkWood": lambda: wood(out, "DarkWood", painted=(92, 58, 36)),
+        "Canvas": lambda: canvas(out, "Canvas"),
+        "Glass": lambda: glass(out, "Glass"),
+        "Neon": lambda: solid(out, "Neon", (255, 120, 170), 0.5, 0.8),
+        "Lamp": lambda: solid(out, "Lamp", (255, 190, 80), 0.5, 0.8),
+        "Flame": lambda: solid(out, "Flame", (150, 200, 255), 0.2, 0.5),
+    }
+    for k, job in jobs.items():
+        if only is None or k in only:
+            job()
 
 
 if __name__ == "__main__":

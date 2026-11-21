@@ -17,9 +17,12 @@ from shapely.geometry import LineString, Polygon
 
 import layout as L
 
-HALF = L.HALF
-GAP = L.GAP
+import os
+
+HALF = float(os.environ.get("MG_HALF", L.HALF))
+GAP = float(os.environ.get("MG_GAP", L.GAP))   # the least room between two holes (rails, signs, set pieces included)
 WALK = 70.0   # a walk this long is free; longer costs
+OVER = float(os.environ.get("MG_OVER", 5.0))  # cost per square unit of two holes (with their gap) overlapping
 
 
 class State:
@@ -50,7 +53,7 @@ class State:
         c = (g.area - g.intersection(self.bounds).area) * 5.0
         for m, gm in self.geo.items():
             if m != n and g.intersects(gm):
-                c += g.intersection(gm).area * 5.0
+                c += g.intersection(gm).area * OVER
         for a in (n - 1, n):
             if 1 <= a <= 17 and a in self.pl and a + 1 in self.pl:
                 c += self.walk_cost(a)
@@ -76,7 +79,7 @@ class State:
             c += (g.area - g.intersection(self.bounds).area) * 5.0
             for m in ns:
                 if m > n and g.intersects(self.geo[m]):
-                    c += g.intersection(self.geo[m]).area * 5.0
+                    c += g.intersection(self.geo[m]).area * OVER
         for a in range(1, 18):
             c += self.walk_cost(a)
         return c
@@ -136,6 +139,10 @@ def main():
     print("}")
     walks = [round(math.dist(st.cup(a), st.pl[a + 1][:2])) for a in range(1, 18)]
     print("# walks", walks)
+    gaps = [st.rawgeo[n].distance(st.rawgeo[m]) for n in range(1, 19) for m in range(n + 1, 19)]
+    print("# closest two holes", round(min(gaps), 1), "(wanted", GAP, ")")
+    out_of = max(max(abs(c) for c in g.bounds) for g in st.rawgeo.values())
+    print("# reaches", round(out_of), "(square half", HALF, ")")
     L.draw(holes, st.pl, st.rawgeo, out)
 
 

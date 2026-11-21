@@ -11,7 +11,7 @@
 //     tee <x> <y> <z> <yaw degrees>          where the ball is placed (z = the surface) and the way the camera faces
 //     cup <x> <y> <z> <radius>               the cup: its centre on the surface and its radius
 //     bounds <minx> <miny> <maxx> <maxy> <minz>   leaving this box, or falling below minz, is out of bounds
-//     tri <surface> x1 y1 z1 x2 y2 z2 x3 y3 z3     a piece of ground. surface: green, water, fast, slow
+//     tri <surface> x1 y1 z1 x2 y2 z2 x3 y3 z3     a piece of ground. surface: green, water, fast, slow, sand
 //     wall <ax> <ay> <bx> <by> <zmin> <zmax> <restitution>   a vertical wall: a segment extruded from zmin to zmax
 //     obstacle <name> spin <cx> <cy> <period s> <phase 0..1>          a moving obstacle turning round (cx, cy)
 //     obstacle <name> slide <dx> <dy> <period s> <phase 0..1>         one sliding back and forth by +-(dx, dy)
@@ -74,7 +74,8 @@ namespace golf
 		kGreen,  // normal carpet
 		kWater,  // a hazard: one stroke penalty, back to where the shot was played from
 		kFast,   // metal, ice: little rolling resistance
-		kSlow    // sand, gravel: a lot
+		kSlow,   // gravel: a lot
+		kSand    // a bunker: a lot more, and a ball landing in it stays (no bounce)
 	};
 
 	struct Tri
