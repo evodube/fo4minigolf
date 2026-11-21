@@ -16,10 +16,13 @@ Form IDs (src/Forms.h expects these):
     xx000803  STAT fo4minigolfBall          the ball the plugin moves (Meshes\\fo4minigolf\\Ball.nif)
     xx000804  STAT fo4minigolfPutter        the putter behind the ball as you aim
     xx000805  STAT fo4minigolfDot           a guide dot: the aiming line is a row of them
-    xx000806  TRNS fo4minigolfCoursePreview the course framed small in the workshop menu (its PTRN): the whole lawn
-                                            seen from above at a fifth of its size, as the game's shack
-                                            prefabs are (workshop_ShackMetalPrefabComplete01)
-    xx000807  ARTO fo4minigolfWorkshopMenuArt  the Mini Golf category's picture: the course, so framed
+    xx000806  TRNS fo4minigolfCoursePreview the course framed small in the workshop menu: the whole lawn seen from
+                                            above at a fifth of its size, as the game's shack prefabs are
+                                            (workshop_ShackMetalPrefabComplete01)
+    xx000807  ARTO fo4minigolfWorkshopMenuArt  the Mini Golf category's picture: CoursePreview.nif (the course cut
+                                            down to a few percent of its triangles, no collision), so framed. Not the
+                                            course's own model, nor a PTRN on the course: the full Course.nif drawn in
+                                            the menu besides the one being placed halved the frame rate
 """
 
 import struct
@@ -90,14 +93,12 @@ def workshop_recipe(form_id: int, editor_id: str, created: int, components: list
     )
 
 
-def activator(form_id: int, editor_id: str, name: str, mesh: str, bounds: tuple, prompt: str, preview: int) -> bytes:
-    """an activator with no script (activating it is what the plugin listens for); its settlement happier for it;
-    framed in the workshop menu by preview (a TRNS)"""
+def activator(form_id: int, editor_id: str, name: str, mesh: str, bounds: tuple, prompt: str) -> bytes:
+    """an activator with no script (activating it is what the plugin listens for); its settlement happier for it"""
     return record(
         b"ACTI", 0, form_id,
         subrecord(b"EDID", zstring(editor_id))
         + subrecord(b"OBND", struct.pack("<6h", *bounds))
-        + subrecord(b"PTRN", struct.pack("<I", preview))
         + subrecord(b"FULL", zstring(name))
         + subrecord(b"MODL", zstring(mesh))
         + subrecord(b"PRPS", struct.pack("<IfIf", WORKSHOP_BONUS_HAPPINESS, HAPPINESS, WORKSHOP_RESOURCE_OBJECT, 1.0))
@@ -149,9 +150,8 @@ def build() -> bytes:
     keywords = [menu_keyword(menu, "fo4minigolfWorkshopMenu", "Mini Golf")]
     # the whole course, a fifth of its size, from a little way off and above, turned a quarter so the holes read
     transforms = [transform(preview, "fo4minigolfCoursePreview", (0.0, 1100.0, -20.0), (5.585, 0.0, 0.785), 0.2)]
-    acti = [activator(course, "fo4minigolfCourse", "Mini Golf Course", "fo4minigolf\\Course.nif", COURSE_BOUNDS, "Play",
-                      preview)]
-    art = [menu_art(OWN | (FIRST_ID + 7), "fo4minigolfWorkshopMenuArt", menu, "fo4minigolf\\Course.nif", preview,
+    acti = [activator(course, "fo4minigolfCourse", "Mini Golf Course", "fo4minigolf\\Course.nif", COURSE_BOUNDS, "Play")]
+    art = [menu_art(OWN | (FIRST_ID + 7), "fo4minigolfWorkshopMenuArt", menu, "fo4minigolf\\CoursePreview.nif", preview,
                     COURSE_BOUNDS)]
     recipes = [workshop_recipe(OWN | (FIRST_ID + 2), "workshop_co_fo4minigolfCourse", course,
                                [(WOOD, 60), (STEEL, 30), (SCREWS, 6)], menu)]

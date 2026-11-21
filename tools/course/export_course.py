@@ -335,7 +335,54 @@ def export_course_nif(root_dir):
     bsx["BSXFlags_Value"] = "HAVOC | ARTICULATED"
     path = os.path.join(root_dir, "Data", "Meshes", "fo4minigolf", "Course.nif")
     _export([root, bsx, col] + shapes + nodes, root, path)
-    return path, len(shapes), len(me.polygons)
+    preview = export_preview_nif(root_dir, shapes, nodes)
+    return path, len(shapes), len(me.polygons), preview
+
+
+def export_preview_nif(root_dir, shapes, nodes, ratio=0.08):
+    """CoursePreview.nif: the workshop menu's picture of the course (the Mini Golf tab's art). The same shapes, the
+    obstacles where they start, cut down to a few percent of the triangles, no collision: the full Course.nif in the
+    menu as well as the one you're placing halved the frame rate"""
+    bpy.context.view_layer.update()
+    coll = bpy.data.collections["Export"]
+    by_mat = {}
+    for s in shapes:
+        by_mat.setdefault(s.data.materials[0].name, []).append((s.data, s.matrix_world.copy()))
+    for n in nodes:
+        if n.type == "MESH" and n.data.materials:
+            by_mat.setdefault(n.data.materials[0].name, []).append((n.data, n.matrix_world.copy()))
+    made = []
+    for mat, parts in sorted(by_mat.items()):
+        bm = bmesh.new()
+        for me, mw in parts:
+            tmp = me.copy()
+            tmp.transform(mw)
+            bm.from_mesh(tmp)
+            bpy.data.meshes.remove(tmp)
+        bmesh.ops.remove_doubles(bm, verts=bm.verts[:], dist=0.05)
+        me = bpy.data.meshes.new(f"Preview_{mat}")
+        bm.to_mesh(me)
+        bm.free()
+        ob = bpy.data.objects.new(f"Preview_{mat}", me)
+        coll.objects.link(ob)
+        if len(me.polygons) > 60:
+            mod = ob.modifiers.new("Decimate", "DECIMATE")
+            mod.ratio = ratio
+            mod.use_collapse_triangulate = True
+            bpy.context.view_layer.update()
+            low = bpy.data.meshes.new_from_object(ob.evaluated_get(bpy.context.evaluated_depsgraph_get()))
+            ob.modifiers.clear()
+            ob.data = low
+        game_normals_mesh(ob.data)
+        ob.data.materials.clear()
+        ob.data.materials.append(bpy.data.materials[mat])
+        made.append(ob)
+    root = _root(coll, "MiniGolfCoursePreview")
+    for ob in made:
+        ob.parent = root
+    path = os.path.join(root_dir, "Data", "Meshes", "fo4minigolf", "CoursePreview.nif")
+    _export([root] + made, root, path)
+    return path, sum(len(o.data.polygons) for o in made)
 
 
 def export_single(root_dir, ob, rel):
