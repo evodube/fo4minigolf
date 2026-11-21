@@ -18,6 +18,12 @@ namespace golf
 			return ((d1 > 0) != (d2 > 0)) && ((d3 > 0) != (d4 > 0));
 		}
 
+		Vec2 Unit(Vec2 v)
+		{
+			const double l = v.Length();
+			return l > 1e-9 ? v * (1.0 / l) : Vec2{ 1.0, 0.0 };
+		}
+
 		std::uint32_t Next(std::uint32_t& s)
 		{
 			s ^= s << 13;
@@ -46,7 +52,8 @@ namespace golf
 		const std::size_t n = static_cast<std::size_t>(_nx) * _ny;
 		_dist.assign(n, -1.0);
 		_floor.assign(n, 0.0);
-		std::vector<std::uint8_t> water(n, 0);
+		_water.assign(n, 0);
+		auto&                     water = _water;
 		std::vector<std::uint8_t> ground(n, 0);
 
 		Sim probe(h, a_spec);
@@ -64,17 +71,7 @@ namespace golf
 			}
 		}
 
-		auto blocked = [&](Vec2 p, Vec2 q, double zp, double zq) {
-			for (const auto& w : h.walls) {
-				if (w.zmax < std::min(zp, zq) + 1.0 || w.zmin > std::max(zp, zq) + 3.0) {
-					continue;
-				}
-				if (SegmentsCross(p, q, w.a, w.b)) {
-					return true;
-				}
-			}
-			return false;
-		};
+		auto blocked = [&](Vec2 p, Vec2 q, double zp, double zq) { return Blocked(p, q, zp, zq); };
 
 		// Dijkstra from the cup, the ball's way reversed: from cell q (nearer the cup) back to p, allowed if a ball
 		// could roll p -> q (not up a step)
@@ -131,6 +128,112 @@ namespace golf
 				}
 			}
 		}
+	}
+
+	bool Bot::Blocked(Vec2 a_p, Vec2 a_q, double a_zp, double a_zq) const
+	{
+		for (const auto& w : _hole->walls) {
+			if (w.zmax < std::min(a_zp, a_zq) + 1.0 || w.zmin > std::max(a_zp, a_zq) + 3.0) {
+				continue;
+			}
+			if (SegmentsCross(a_p, a_q, w.a, w.b)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	int Bot::CellOf(Vec2 a_p) const
+	{
+		const int i = static_cast<int>(std::floor((a_p.x - _x0) / kCell));
+		const int j = static_cast<int>(std::floor((a_p.y - _y0) / kCell));
+		if (i < 0 || j < 0 || i >= _nx || j >= _ny) {
+			return -1;
+		}
+		return j * _nx + i;
+	}
+
+	bool Bot::Clear(Vec2 a_from, Vec2 a_to, double a_z) const
+	{
+		// no wall across the line, and ground all the way (no water, no gap, no step up it can't climb)
+		const double len = (a_to - a_from).Length();
+		double       zPrev = a_z;
+		const int    n = std::max(1, static_cast<int>(len / 2.0));
+		for (int s = 1; s <= n; ++s) {
+			const Vec2 p = a_from + (a_to - a_from) * (static_cast<double>(s) / n);
+			const int  k = CellOf(p);
+			if (k < 0 || _dist[k] < 0.0 || _water[k]) {
+				return false;
+			}
+			if (_floor[k] - zPrev > 6.0) {
+				return false;
+			}
+			zPrev = _floor[k];
+		}
+		// (the walls at the ball's height and a little over: a rail's a wall, a ramp's edge under it isn't)
+		const int kTo = CellOf(a_to);
+		return !Blocked(a_from, a_to, a_z, kTo >= 0 ? _floor[kTo] : a_z);
+	}
+
+	Vec2 Bot::RouteAim(Vec3 a_pos, double* a_reach) const
+	{
+		// the route: from the ball's cell down the field to the cup, each step to the lowest neighbour it can reach
+		std::vector<Vec2> route;
+		int               k = CellOf(a_pos.XY());
+		if (k < 0 || _dist[k] < 0.0) {
+			// (on a cell's edge: the nearest one with ground)
+			double best = 1e18;
+			for (int dj = -2; dj <= 2; ++dj) {
+				for (int di = -2; di <= 2; ++di) {
+					const int m = CellOf({ a_pos.x + di * kCell, a_pos.y + dj * kCell });
+					if (m >= 0 && _dist[m] >= 0.0 && _dist[m] < best) {
+						best = _dist[m];
+						k = m;
+					}
+				}
+			}
+		}
+		const auto centre = [&](int a_k) { return Vec2{ _x0 + (a_k % _nx + 0.5) * kCell, _y0 + (a_k / _nx + 0.5) * kCell }; };
+		if (k >= 0 && _dist[k] >= 0.0) {
+			for (int guard = 0; guard < 4000 && _dist[k] > kCell * 1.5; ++guard) {
+				const int qi = k % _nx, qj = k / _nx;
+				int       next = -1;
+				double    low = _dist[k];
+				for (int dj = -1; dj <= 1; ++dj) {
+					for (int di = -1; di <= 1; ++di) {
+						const int pi = qi + di, pj = qj + dj;
+						if ((!di && !dj) || pi < 0 || pj < 0 || pi >= _nx || pj >= _ny) {
+							continue;
+						}
+						const int m = pj * _nx + pi;
+						if (_dist[m] >= 0.0 && _dist[m] < low && !Blocked(centre(k), centre(m), _floor[k], _floor[m])) {
+							low = _dist[m];
+							next = m;
+						}
+					}
+				}
+				if (next < 0) {
+					break;
+				}
+				k = next;
+				route.push_back(centre(k));
+			}
+		}
+		route.push_back(_hole->cup.XY());
+		// the aim: the furthest point on it a straight putt reaches (the cup itself, if it's in sight)
+		const Vec2 from = a_pos.XY();
+		for (int i = static_cast<int>(route.size()) - 1; i >= 0; --i) {
+			if ((route[i] - from).Length() > 1.0 && Clear(from, route[i], a_pos.z)) {
+				if (a_reach) {
+					*a_reach = static_cast<double>(i + 1) / route.size();
+				}
+				return Unit(route[i] - from);
+			}
+		}
+		if (a_reach) {
+			*a_reach = 0.0;
+		}
+		return route.size() > 1 && (route[0] - from).Length() > 1e-6 ? Unit(route[0] - from) : Toward(a_pos);
 	}
 
 	double Bot::Distance(Vec3 a_pos) const
@@ -210,15 +313,21 @@ namespace golf
 		const Vec3   from = a_sim.Pos();
 		const double before = Distance(from);
 		const int    dirs = _hole->obstacles.empty() ? 48 : 36;
-		// the cup's way: within about 100 degrees of the line along the ground to it (banks off the rails still in)
-		Shot best = Choose(a_sim, dirs, 10, a_seed, a_threads, -0.17);
-		if (best.end != BallState::kInCup && !(best.score < before)) {
-			best = Choose(a_sim, dirs, 10, a_seed + 7, a_threads);  // (nothing that way gains: anything that does)
+		// the route, as a golfer reads it: round the bends, at the furthest point of it in sight (the cup, if it is)
+		const Vec2 aim = RouteAim(from);
+		// putts along that line, give or take 35 degrees (the slopes and banks bend it), their weight what gets
+		// nearest the cup along the ground
+		Shot best = Choose(a_sim, dirs * 4, 10, a_seed, a_threads, 0.82, &aim);  // (a quarter of the circle tried, closer)
+		if (best.end != BallState::kInCup && !(best.score < before - 2.0)) {
+			// nothing down the route gains: off a rail round the bend, still roughly the cup's way
+			best = Choose(a_sim, dirs, 10, a_seed + 7, a_threads, -0.17, &aim);
 		}
 		if (best.end != BallState::kInCup && !(best.score < before)) {
-			// still nothing: a firm putt straight down the line to the cup
-			const Vec2 to = Toward(from);
-			best = Try(a_sim, to, std::clamp(before * 1.4, 60.0, _spec.maxSpeed * 0.7), 0.0);
+			best = Choose(a_sim, dirs, 10, a_seed + 13, a_threads);  // (anything that gains)
+		}
+		if (best.end != BallState::kInCup && !(best.score < before)) {
+			// still nothing: a firm putt down the route
+			best = Try(a_sim, aim, std::clamp(before * 1.4, 60.0, _spec.maxSpeed * 0.7), 0.0);
 		}
 		// their miss: off line and weight by skill, kept only if it still gains ground and stays out of trouble
 		a_skill = std::clamp(a_skill, 0.0, 1.0);
@@ -249,9 +358,10 @@ namespace golf
 		return best;
 	}
 
-	Shot Bot::Choose(const Sim& a_sim, int a_dirs, int a_speeds, std::uint32_t a_seed, int a_threads, double a_minDot) const
+	Shot Bot::Choose(const Sim& a_sim, int a_dirs, int a_speeds, std::uint32_t a_seed, int a_threads, double a_minDot,
+		const Vec2* a_toward) const
 	{
-		const Vec2 toward = a_minDot > -1.5 ? Toward(a_sim.Pos()) : Vec2{ 1.0, 0.0 };
+		const Vec2 toward = a_toward ? *a_toward : a_minDot > -1.5 ? Toward(a_sim.Pos()) : Vec2{ 1.0, 0.0 };
 		std::uint32_t rng = a_seed * 2654435761u + 12345u;
 		const double  jitter = (Next(rng) % 1000) / 1000.0;
 		std::vector<double> waits{ 0.0 };

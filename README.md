@@ -39,7 +39,7 @@ game's textures where it has a fitting one, and our own for the carpet, signs, r
 |---|------|-----|-------|--------------|
 | 1 | Welcome Mat | 2 | dogleg left | a mound, tyre stacks |
 | 2 | Old Windmill | 3 | rise, then down and right | the windmill on a rise, its sails block the tunnel; a ramp down to the green, a bunker |
-| 3 | Nuka Alley | 3 | banked S-bend, climbing | giant Nuka-Cola bottles |
+| 3 | Nuka Alley | 4 | banked S-bend, climbing | giant Nuka-Cola bottles |
 | 4 | Rust Ramp | 3 | steep ramp, hard left | a scrap-metal plateau, a bunker |
 | 5 | Toxic Crossing | 2 | dumbbell | a hump between sand bunkers |
 | 6 | Vertibird | 3 | uphill, right bend, big round green | a rotor sweeping the green, a bunker |

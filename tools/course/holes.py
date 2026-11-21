@@ -9,7 +9,7 @@
 HOLES = [
     (1, 2, "Welcome Mat", "junk"),
     (2, 3, "Old Windmill", "americana"),
-    (3, 3, "Nuka Alley", "americana"),
+    (3, 4, "Nuka Alley", "americana"),
     (4, 3, "Rust Ramp", "junk"),
     (5, 2, "Toxic Crossing", "glow"),
     (6, 3, "Vertibird", "military"),

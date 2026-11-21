@@ -1955,7 +1955,7 @@ obstacle Hole02_MillSails wheel -370.6 296.92 82 195 8 0 4 11
 ovisual -370.6 296.92 82 195
 owall -365.82 286.82 -371.52 308.07 36 56 0.4
 
-hole 3 3 Nuka Alley
+hole 3 4 Nuka Alley
 tee -566.3 146.8 14.49 180
 cup -489.54 -62.65 26.19 3.78
 bounds -609.3 -110.97 -441.21 207.8 -11

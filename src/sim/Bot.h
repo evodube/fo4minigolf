@@ -33,8 +33,14 @@ namespace golf
 		// if the hole has moving obstacles). a_seed varies the directions tried a little.
 		// a_threads: the directions shared out over that many threads (a settler's shot in the game: a second, not ten)
 		// a_minDot: only directions within this of Toward (its cosine: -2 any, 0 no further round than square to it)
+		// a_toward: the line a_minDot is measured from (null: Toward)
 		Shot Choose(const Sim& a_sim, int a_dirs = 72, int a_speeds = 12, std::uint32_t a_seed = 1, int a_threads = 1,
-			double a_minDot = -2.0) const;
+			double a_minDot = -2.0, const Vec2* a_toward = nullptr) const;
+
+		// The best way to the cup from a_pos, as a golfer reads it: the route round the walls (down the distance
+		// field, cell by cell, to the cup), and on it the furthest point a straight putt can reach - nothing in the
+		// way, no water, no gap. The unit vector to that point (a_reach: how far along the route it is).
+		Vec2 RouteAim(Vec3 a_pos, double* a_reach = nullptr) const;
 
 		// Which way the cup is from a_pos along the ground, round the walls (the distance field's downhill): a unit
 		// vector.
@@ -57,5 +63,10 @@ namespace golf
 		int                 _nx{ 0 }, _ny{ 0 };
 		std::vector<double> _dist;   // per cell, along the ground to the cup; < 0 = no ground
 		std::vector<double> _floor;  // per cell, the ground's height
+		std::vector<std::uint8_t> _water;  // per cell: water
+
+		bool Blocked(Vec2 a_p, Vec2 a_q, double a_zp, double a_zq) const;  // a wall between them
+		bool Clear(Vec2 a_from, Vec2 a_to, double a_z) const;            // a straight putt could roll it
+		int  CellOf(Vec2 a_p) const;                                       // -1: off the grid
 	};
 }
