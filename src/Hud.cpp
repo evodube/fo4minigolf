@@ -355,10 +355,46 @@ namespace mg::Hud
 			Print(a_v, Mono(), a_st.keys, 30.0f, a_v.h - 34.0f, 12, Fade(kDim, 0.9f), 0, 1.0f);
 		}
 
+		// hold activate on the course: who to play, beside the crosshair (as Playable Pool's)
+		void PickList(ImGuiViewport* a_viewport, const Golf::HudState& a_st)
+		{
+			View v;
+			v.dl = GetBackgroundDrawList();
+			if (!v.dl) {
+				return;
+			}
+			v.s = std::max(0.1f, a_viewport->Size.y / 720.0f);
+			v.origin = a_viewport->Pos;
+			v.w = a_viewport->Size.x / v.s;
+			v.h = a_viewport->Size.y / v.s;
+			const float x = v.w * 0.5f + 40.0f;
+			float       y = v.h * 0.5f + 10.0f;
+			const float h = 48.0f + 24.0f * static_cast<float>(a_st.pick.size());
+			Chamfer(v, x - 14.0f, y - 12.0f, 400.0f, h, 8.0f, kPanel, kEdge);
+			Print(v, Mono(), "WHO PLAYS?", x, y, 13, kDim, 0, 2.0f);
+			y += 22.0f;
+			for (std::size_t i = 0; i < a_st.pick.size(); ++i) {
+				const bool on = static_cast<int>(i) == a_st.pickSel;
+				if (on) {
+					DL::AddTriangleFilled(v.dl, v.P(x, y + 6), v.P(x + 10, y + 12), v.P(x, y + 18), kText);
+				}
+				Print(v, Title(), a_st.pick[i], x + 18, y - 2, 20, on ? kBright : kOff, on ? kGlow : 0, 1.5f);
+				y += 24.0f;
+			}
+			Print(v, Mono(), a_st.pickHint, x, y + 4.0f, 12, kDim, 0, 1.0f);
+		}
+
 		void __stdcall Draw()
 		{
 			const auto st = Golf::Get().Hud();
 			auto*      viewport = GetMainViewport();
+			if (viewport && !st.playing && !st.pick.empty()) {
+				Texture(Title().file);
+				if (!g_artMissing) {
+					PickList(viewport, st);
+				}
+				return;
+			}
 			if (!viewport || !st.playing) {
 				return;
 			}

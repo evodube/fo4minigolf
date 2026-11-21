@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 #include "sim/Bot.h"
 #include "sim/Course.h"
 #include "sim/Sim.h"
@@ -11,8 +13,9 @@
 // hold the left mouse button and pull the mouse back for power, let go to putt. The right button looks down on the
 // whole hole. Between holes you're moved to the next tee: no walking. X ends the round.
 //
-// Holding the activate key on the course (rather than tapping it) plays a settler 1v1: the nearest one (settlers,
-// companions: grown-up, friendly people) plays each hole after you, their shots worked out by the physics (Bot) on a
+// Holding the activate key on the course (rather than tapping it) brings up a list of who's about to play, as
+// Playable Pool's (settlers, companions: grown-up, friendly people near you, nearest first; up/down arrows pick, the
+// activate key on the course plays them). They play each hole after you, their shots worked out by the physics (Bot) on a
 // worker thread, made less than perfect by [Opponent] fSkill. Lowest total over the 18 wins.
 //
 // Threads: Tick runs on the game's main thread (queued from the render thread every frame), as do the camera hooks
@@ -87,6 +90,10 @@ namespace mg
 			int              oppTotal{ 0 };
 			int              oppParSoFar{ 0 };
 			bool             oppTurn{ false };   // they're playing the hole now
+			// the who-to-play list (hold the activate key on the course): names, the one picked
+			std::vector<std::string> pick;
+			int                      pickSel{ 0 };
+			std::string              pickHint;
 		};
 		HudState Hud() const;
 
@@ -136,7 +143,9 @@ namespace mg
 
 		// the settler you're playing
 		RE::Actor*  Opponent() const;
-		RE::Actor*  FindOpponent(RE::TESObjectREFR* a_course) const;
+		std::vector<RE::Actor*> PlayersNear() const;  // who you could play: near you, nearest first (7 at most)
+		void        OpenPick(RE::TESObjectREFR* a_course);
+		void        ClosePick();
 		void        StartOpponentTurn();
 		void        TickOpponent();
 		void        PlanOpponentShot();
@@ -186,6 +195,20 @@ namespace mg
 		RE::ObjectRefHandle                   _pendingCourse;  // activated: waiting to see if it's a hold
 		float                                 _pendingAge{ 0.0f };
 		static constexpr std::int64_t         kHoldMs = 500;
+
+		// ---- the who-to-play list
+		struct Pick
+		{
+			RE::ObjectRefHandle              course;
+			std::vector<RE::ObjectRefHandle> who;
+			std::vector<std::string>         names;
+			int                              sel{ 0 };
+			float                            idle{ 0.0f };  // seconds since it was last touched
+		};
+		std::optional<Pick> _pick;
+		std::atomic<bool>   _picking{ false };   // (the render thread: the arrows go to it)
+		std::atomic<int>    _pickMove{ 0 };      // arrow presses not yet applied (render thread -> main)
+		std::array<bool, 2> _arrowWas{};
 
 		// ---- the settler you're playing (none: solo)
 		RE::ObjectRefHandle _opponent;

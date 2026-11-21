@@ -8,9 +8,10 @@ own ball physics (like Playable Pool). Between holes you're moved to the next te
 Build the **Mini Golf Course** from the workshop (Furniture > Mini Golf) and activate it (or press **Numpad 7**
 anywhere on or near it) to start a round at hole 1.
 
-**Hold** the activate key on the course instead to play the nearest settler 1v1 (or a companion: any grown-up,
-friendly person within about 28 m). You putt first on every hole, then they play it; the lowest total over the 18
-wins. They're invisible while you play (`[Opponent] bHide=0` has them stand by their ball instead); how true their
+**Hold** the activate key on the course instead to play someone 1v1: a list comes up of who's near you to play
+(settlers and companions: grown-up, friendly people, nearest first), as Playable Pool's. **Up/Down** picks, the
+activate key on the course plays them. You putt first on every hole, then they play it; the lowest total over the
+18 wins. They're invisible while you play (`[Opponent] bHide=0` has them stand by their ball instead); how true their
 putts are is `[Opponent] fSkill` in the ini.
 
 - **Aim:** look where you want the ball to go; the green line shows the line you're starting it on.

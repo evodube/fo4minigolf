@@ -229,6 +229,17 @@ namespace mg
 			}
 			_activateDown = down;
 		}
+		if (_picking.load()) {
+			// up/down through the who-to-play list
+			const std::array<int, 2> arrows{ VK_UP, VK_DOWN };
+			for (std::size_t i = 0; i < arrows.size(); ++i) {
+				const bool down = util::GameHasFocus() && (::GetAsyncKeyState(arrows[i]) & 0x8000) != 0;
+				if (down && !_arrowWas[i]) {
+					_pickMove += i == 0 ? -1 : 1;
+				}
+				_arrowWas[i] = down;
+			}
+		}
 		if (!_playing) {
 			// not playing: only the play key (a round on the nearest course)
 			const int vk = Settings::Get().keyPlay;
@@ -334,6 +345,26 @@ namespace mg
 		if (_pendingCourse) {
 			_pendingAge += dt;
 			DecidePending();
+		}
+		if (_pick) {
+			// the list: moved by the arrows; gone if you play, walk off or leave it be a while
+			if (const int by = _pickMove.exchange(0); by != 0 && !_pick->names.empty()) {
+				const int n = static_cast<int>(_pick->names.size());
+				_pick->sel = ((_pick->sel + by) % n + n) % n;
+				_pick->idle = 0.0f;
+			}
+			_pick->idle += dt;
+			auto  course = _pick->course.get();
+			auto* player = RE::PlayerCharacter::GetSingleton();
+			bool  near = false;
+			if (course && player && !_pick->who.empty()) {
+				if (auto first = _pick->who[_pick->sel].get()) {
+					near = (first->data.location - player->data.location).Length() < Settings::Get().oppRange + 600.0f;
+				}
+			}
+			if (_playing || !course || !near || _pick->idle > 20.0f || IsGamePaused()) {
+				ClosePick();
+			}
 		}
 		if (_playing) {
 			if (menus::Open(menus::kDialogue)) {
@@ -471,14 +502,62 @@ namespace mg
 			hold = upAt > downAt && upAt - downAt >= kHoldMs && now - upAt < 1500;
 		}
 		_pendingCourse = {};
-		RE::Actor* opponent = nullptr;
 		if (hold) {
-			opponent = FindOpponent(course.get());
-			if (!opponent) {
-				RE::SendHUDMessage::ShowHUDMessage("Mini Golf: nobody near enough to play you. A solo round, then", nullptr, false, false);
+			if (!_pick) {
+				OpenPick(course.get());  // held: who to play
 			}
+			return;
 		}
-		StartRound(course.get(), opponent);
+		if (_pick) {
+			// the list's up: a tap plays whoever's picked
+			auto  who = _pick->who[_pick->sel].get();
+			auto* actor = who ? who->As<RE::Actor>() : nullptr;
+			ClosePick();
+			if (actor && !actor->IsDead(false) && !actor->IsDisabled() && !actor->IsInCombat()) {
+				log::info("picked {} ({:08X}) to play", actor->GetDisplayFullName(), actor->GetFormID());
+				StartRound(course.get(), actor);
+			} else {
+				RE::SendHUDMessage::ShowHUDMessage("Mini Golf: they can't play now. A solo round, then", nullptr, false, false);
+				StartRound(course.get());
+			}
+			return;
+		}
+		StartRound(course.get());  // tapped: solo
+	}
+
+	void Golf::OpenPick(RE::TESObjectREFR* a_course)
+	{
+		const auto people = PlayersNear();
+		if (people.empty()) {
+			const int act = _activateVk.load();
+			RE::SendHUDMessage::ShowHUDMessage(
+				std::format("Mini Golf: nobody's near enough to play. {} plays a solo round", act > 0 ? Settings::Key(act) : std::string("Activate")).c_str(),
+				nullptr, false, false);
+			return;
+		}
+		Pick pick;
+		pick.course = a_course->GetHandle();
+		for (auto* a : people) {
+			const char* n = a->GetDisplayFullName();
+			if (!n || !*n) {
+				continue;
+			}
+			pick.who.push_back(a->GetHandle());
+			pick.names.push_back(Upper(n));
+		}
+		if (pick.names.empty()) {
+			return;
+		}
+		log::info("who-to-play list: {} people", pick.names.size());
+		_pick = std::move(pick);
+		_picking = true;
+	}
+
+	void Golf::ClosePick()
+	{
+		_pick.reset();
+		_picking = false;
+		_pickMove = 0;
 	}
 
 	void Golf::StartRound(RE::TESObjectREFR* a_course, RE::Actor* a_opponent)
@@ -885,17 +964,16 @@ namespace mg
 		return actor;
 	}
 
-	RE::Actor* Golf::FindOpponent(RE::TESObjectREFR* a_course) const
+	std::vector<RE::Actor*> Golf::PlayersNear() const
 	{
-		// the nearest grown-up, friendly person to you (settlers, companions), not fighting, not in power armour
+		// grown-up, friendly people near you (settlers, companions), not fighting, not in power armour; nearest first
 		auto* player = RE::PlayerCharacter::GetSingleton();
-		if (!player || !a_course) {
-			return nullptr;
+		if (!player) {
+			return {};
 		}
 		static auto* npcType = RE::TESForm::GetFormByID<RE::BGSKeyword>(0x00013794);  // ActorTypeNPC
 		const float  within = Settings::Get().oppRange;
-		RE::Actor*   best = nullptr;
-		float        bestD = within;
+		std::vector<std::pair<float, RE::Actor*>> found;
 		util::ForEachLoadedCell([&](RE::TESObjectCELL* a_cell) {
 			a_cell->ForEachReferenceInRange(player->data.location, within, [&](RE::TESObjectREFR* a_ref) {
 				auto* actor = a_ref ? a_ref->As<RE::Actor>() : nullptr;
@@ -904,15 +982,18 @@ namespace mg
 					(npcType && !actor->HasKeywordHelper(npcType, nullptr))) {
 					return RE::BSContainer::ForEachResult::kContinue;
 				}
-				const float d = (actor->data.location - player->data.location).Length();
-				if (d < bestD) {
-					bestD = d;
-					best = actor;
+				if (std::ranges::none_of(found, [&](const auto& f) { return f.second == actor; })) {
+					found.emplace_back((actor->data.location - player->data.location).Length(), actor);
 				}
 				return RE::BSContainer::ForEachResult::kContinue;
 			});
 		});
-		return best;
+		std::ranges::sort(found, {}, &std::pair<float, RE::Actor*>::first);
+		std::vector<RE::Actor*> out;
+		for (std::size_t i = 0; i < found.size() && i < 7; ++i) {
+			out.push_back(found[i].second);
+		}
+		return out;
 	}
 
 	void Golf::StartOpponentTurn()
@@ -1616,6 +1697,13 @@ namespace mg
 	{
 		HudState h;
 		h.playing = _playing;
+		if (_pick && !_playing) {
+			h.pick = _pick->names;
+			h.pickSel = _pick->sel;
+			const int         act = _activateVk.load();
+			const std::string key = act > 0 ? Settings::Key(act) : std::string("ACTIVATE");
+			h.pickHint = std::format("UP/DOWN: PICK · {} ON THE COURSE: PLAY", key);
+		}
 		if (_playing && _hole < static_cast<int>(_course.holes.size())) {
 			const auto& hole = _course.holes[_hole];
 			h.hole = hole.number;
