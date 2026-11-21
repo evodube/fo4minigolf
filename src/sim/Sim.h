@@ -30,7 +30,9 @@ namespace golf
 		double stepUp{ 0.6 };             // in ball radii: a seam this high is rolled over
 		double launchSpeed{ 25.0 };       // moving away from the ground faster than this at a crest: airborne
 		double maxSpeed{ 420.0 };         // full power, 6 m/s
-		double maxShotTime{ 30.0 };       // a shot still going after this is stopped
+		double maxShotTime{ 20.0 };       // a shot still going after this is stopped
+		double stuckTime{ 1.0 };          // moving but not getting anywhere (under stuckDistance) this long: stopped
+		double stuckDistance{ 0.75 };
 	};
 
 	enum class BallState : std::uint8_t
@@ -119,6 +121,7 @@ namespace golf
 		bool CollideWall(const Wall& a_wall, Vec2 a_a, Vec2 a_b, int a_obstacle, std::vector<Event>& a_events);
 		void CollideRim(std::vector<Event>& a_events);
 		void CheckFinish(std::vector<Event>& a_events);
+		void Settle(std::vector<Event>& a_events);  // stopped where it is: at rest on the ground, or out if none
 		bool OverCup(Vec2 a_xy) const;
 		double CentreZ(double a_surface, const Tri* a_tri) const;
 		double Resistance(const Tri* a_tri) const;
@@ -134,5 +137,7 @@ namespace golf
 		double      _time{ 0.0 };    // the ball's world's own time: whole substeps
 		double      _target{ 0.0 };  // where the caller has asked it to step to
 		double      _shotTime{ 0.0 };
+		Vec3        _stuckFrom;           // where it was when it last got somewhere
+		double      _stuckFor{ 0.0 };     // ...how long ago
 	};
 }

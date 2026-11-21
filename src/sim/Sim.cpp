@@ -141,6 +141,8 @@ namespace golf
 		_ground = tri;
 		_state = BallState::kRest;
 		_shotTime = 0.0;
+		_stuckFrom = _pos;
+		_stuckFor = 0.0;
 		return true;
 	}
 
@@ -157,6 +159,8 @@ namespace golf
 		_vel = vl > 0.0 ? v * (a_speed / vl) : Vec3{};
 		_state = BallState::kRolling;
 		_shotTime = 0.0;
+		_stuckFrom = _pos;
+		_stuckFor = 0.0;
 	}
 
 	void Sim::ObstaclePose(int a_index, double& a_angle, Vec2& a_offset, double& a_lift) const
@@ -201,8 +205,19 @@ namespace golf
 		if (_state == BallState::kRolling || _state == BallState::kAir) {
 			CollideRim(a_events);
 			_shotTime += a_h;
+			_stuckFor += a_h;
 		}
 		CheckFinish(a_events);
+		if (Moving()) {
+			// still "moving" but going nowhere - rocking on an edge, pinned against a rail by a slope, jiggling in a
+			// corner - for a second: stopped there, so the next putt can always be played
+			if ((_pos - _stuckFrom).Length() > _spec.stuckDistance) {
+				_stuckFrom = _pos;
+				_stuckFor = 0.0;
+			} else if (_stuckFor > _spec.stuckTime) {
+				Settle(a_events);
+			}
+		}
 	}
 
 	void Sim::Roll(double a_h, std::vector<Event>& a_events)
@@ -349,14 +364,23 @@ namespace golf
 		const double vn = (v - wallVel).Dot(nrm);
 		if (vn < 0.0) {
 			v = v - nrm * ((1.0 + a_wall.restitution) * vn);
+			// (a bumper kicks harder than it's hit: never past a full putt, or a ball caught between two would
+			// gain speed for ever)
+			const double vl = v.Length();
+			if (vl > _spec.maxSpeed) {
+				v = v * (_spec.maxSpeed / vl);
+			}
 			_vel.x = v.x;
 			_vel.y = v.y;
 			if (-vn > 3.0) {
 				a_events.push_back({ Event::Type::kWall, a_obstacle, -vn, _pos });
 			}
 			if (_state == BallState::kRest) {
+				// knocked by an obstacle: moving again, the shot's clock still running (not restarted: a ball a blade
+				// keeps carrying round would never stop)
 				_state = _ground ? BallState::kRolling : BallState::kAir;
-				_shotTime = 0.0;
+				_stuckFrom = _pos;
+				_stuckFor = 0.0;
 			}
 		}
 		const Vec2 out = q + nrm * r;
@@ -424,21 +448,27 @@ namespace golf
 			return;
 		}
 		if (Moving() && _shotTime > _spec.maxShotTime) {
-			// stuck somewhere (rocking in a dip, wedged against an obstacle): settle where it is
-			double     z = 0.0;
-			const Tri* tri = nullptr;
-			if (Ground(_pos.XY(), _pos.z, z, tri)) {
-				_ground = tri;
-				_pos.z = CentreZ(z, tri);
-				_vel = {};
-				_state = BallState::kRest;
-				a_events.push_back({ Event::Type::kRest, -1, 0.0, _pos });
-			} else {
-				_state = BallState::kOut;
-				_vel = {};
-				a_events.push_back({ Event::Type::kOut, -1, 0.0, _pos });
-			}
+			Settle(a_events);  // going round and round somewhere: stopped where it is
 		}
+	}
+
+	void Sim::Settle(std::vector<Event>& a_events)
+	{
+		double     z = 0.0;
+		const Tri* tri = nullptr;
+		// the ground under it (a little above too: perched on a rail cap's edge, the green just below)
+		if (Ground(_pos.XY(), _pos.z + _spec.ballRadius, z, tri) && _pos.z - CentreZ(z, tri) < 3.0 * _spec.ballRadius) {
+			_ground = tri;
+			_pos.z = CentreZ(z, tri);
+			_vel = {};
+			_state = BallState::kRest;
+			a_events.push_back({ Event::Type::kRest, -1, 0.0, _pos });
+		} else {
+			_state = BallState::kOut;  // (no ground under it: back where it was putted from, a stroke added)
+			_vel = {};
+			a_events.push_back({ Event::Type::kOut, -1, 0.0, _pos });
+		}
+		_stuckFor = 0.0;
 	}
 
 	void Sim::Spin(double a_h)

@@ -18,6 +18,8 @@ jobs:
           ./sim_test dist/Data/F4SE/Plugins/fo4minigolf/course.txt
           g++ -std=c++20 -O2 -Wall -Wextra -Isrc tests/course_play.cpp src/sim/Sim.cpp src/sim/Course.cpp src/sim/Bot.cpp -pthread -o course_play
           ./course_play dist/Data/F4SE/Plugins/fo4minigolf/course.txt
+          g++ -std=c++20 -O2 -Wall -Wextra -Isrc tests/stuck_test.cpp src/sim/Sim.cpp src/sim/Course.cpp -o stuck_test
+          ./stuck_test dist/Data/F4SE/Plugins/fo4minigolf/course.txt
 
   build:
     runs-on: windows-latest
