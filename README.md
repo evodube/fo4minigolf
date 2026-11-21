@@ -23,7 +23,7 @@ Needs F4SE, the Address Library, and F4SE Menu Framework for the HUD. Works on 1
 
 About 18 m square, after a 1950s roadside putt-putt that came through the bombs: brick, stone, scrap metal and
 Vault-Tec steel rails with moulded caps, real cut cups, mini golf carpet (the turf is only ever turf: the hazards are
-sand bunkers and toxic muck), raised tees, ramps, banked turns and drops, and a set piece on most holes: a Dutch smock
+sand bunkers, no water), raised tees, ramps, banked turns and drops, and a set piece on most holes: a Dutch smock
 windmill, a streamline diner, a stone gatehouse, a crane and wrecking ball, Mr. Handy, giant Nuka-Cola bottles. The
 holes are laid out with a clear gap between every two of them (nothing touches), and the lawn between is planted with
 the game's own clipped boxwoods, holly, roses and rocks (`tools/course/dressing.py`). The set pieces and holes use the
@@ -36,7 +36,7 @@ game's textures where it has a fitting one, and our own for the carpet, signs, r
 | 2 | Old Windmill | 3 | rise, then down and right | the windmill on a rise, its sails block the tunnel; a ramp down to the green, a bunker |
 | 3 | Nuka Alley | 2 | banked S-bend, climbing | giant Nuka-Cola bottles |
 | 4 | Rust Ramp | 3 | steep ramp, hard left | a scrap-metal plateau, a bunker |
-| 5 | Toxic Crossing | 3 | dumbbell | a humped plank bridge over muck |
+| 5 | Toxic Crossing | 3 | dumbbell | a hump between sand bunkers |
 | 6 | Vertibird | 3 | uphill, right bend, big round green | a rotor sweeping the green, a bunker |
 | 7 | Diner Dogleg | 3 | uphill into a banked 90 | the diner on the corner |
 | 8 | The Volcano | 3 | bend into a lollipop | the cup on top of a cone, lava rocks |
@@ -44,8 +44,8 @@ game's textures where it has a fitting one, and our own for the carpet, signs, r
 | 10 | Tire Yard | 2 | ramp up to a clover | bouncy tyres |
 | 11 | The Drop | 2 | steep covered chute, bend at the bottom | |
 | 12 | Wrecking Ball | 3 | banked hairpin | a crane and swinging wrecking ball |
-| 13 | Fat Man Jump | 3 | kicker ramp, island green | a jump over muck, a mini nuke on its cradle |
-| 14 | Glowing Sea | 3 | wide wave | rolling ground, two sand bunkers, a toxic pool |
+| 13 | Fat Man Jump | 3 | kicker ramp, island green | a jump over a sand trap, a mini nuke on its cradle |
+| 14 | Glowing Sea | 3 | wide wave | rolling ground, three sand bunkers |
 | 15 | Castle Gate | 3 | ramp up, through the gate, bend | the gatehouse and a rising portcullis |
 | 16 | Mr. Handy | 3 | curving barbell | his three arms sweeping the green, a bunker by the cup |
 | 17 | Zigzag | 3 | three switchbacks down a hillside | terraces with a ramp down round each bend |

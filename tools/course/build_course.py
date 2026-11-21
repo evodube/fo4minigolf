@@ -1045,14 +1045,12 @@ def hole04(H):  # Rust Ramp: a steep ramp up onto a scrap-metal plateau, a hard 
     H.sign_side = -1
 
 
-def hole05(H):  # Toxic Crossing: a dumbbell, a humped plank bridge over the muck between the two round ends
+def hole05(H):  # Toxic Crossing: a dumbbell, a hump between the two round ends with sand traps either side
     H.shape([("L", 280)], 30, circles=[(10, 0, 36), (272, 0, 36)])
-    water = [H.strip(110, 180, -40, -9), H.strip(110, 180, 9, 40)]
-    H.lane(H.along(lambda s, d: 10.0 * math.sin(math.pi * min(1.0, max(0.0, (s - 95.0) / 100.0))) ** 2), holes=water)
-    for i, w in enumerate(water):
-        ground(H.tag(f"Muck{i}"), grown(w, 6.0), flat, H.z0 - 3.0, H.coll, "Muck", "water", H.n)
+    # a hump over the middle, sand bunkers either side of it (no water on the course)
+    H.bunkers([(145, 21, 24, 7, 0), (145, -21, 24, 7, 0)])
+    H.lane(H.along(lambda s, d: 10.0 * math.sin(math.pi * min(1.0, max(0.0, (s - 95.0) / 100.0))) ** 2))
     import props as P
-    P.bridge(H, 95.0, 195.0, 9.0)
     H.tee = H.p(10)
     H.cup = H.p(272)
 
@@ -1173,7 +1171,7 @@ def hole12(H):  # Wrecking Ball: a banked hairpin, the ball swinging over the fi
     H.sign_side = -1
 
 
-def hole13(H):  # Fat Man Jump: up the kicker ramp and over the muck to the island green
+def hole13(H):  # Fat Man Jump: up the kicker ramp and over the sand trap to the island green
     import props as P
     H.path = Path([("L", 175)])
     H.half = 18.0
@@ -1191,7 +1189,8 @@ def hole13(H):  # Fat Man Jump: up the kicker ramp and over the muck to the isla
     ground(H.tag("Island"), island, flat, H.z0, H.coll, "Turf", "green", H.n)
     arc = [(cx + r * math.cos(a), r * math.sin(a)) for a in [math.radians(-145 + 290 * k / 30) for k in range(31)]]
     rail(H.tag("IslandRail"), arc, flat, H.z0, DECK, H.coll, H.rails, H.n, closed=False, cap=H.trim)
-    ground(H.tag("Muck"), [(165, -44), (cx - 10, -44), (cx - 10, 44), (165, 44)], flat, H.z0 - 3.0, H.coll, "Muck", "water", H.n)
+    # the gap before the island: a sand trap at the island's level (land short and you play out of the sand)
+    ground(H.tag("Trap"), [(176, -40), (cx, -40), (cx, 40), (176, 40)], flat, H.z0 - 0.25, H.coll, "Sand", "sand", H.n, grid=6.0)
     # the lip's face: closed, the rail's material, from the ground up to the ramp's top
     top = H.z0 + 18.0
     box(H.tag("LipFace"), H.coll, (175.0 + RAIL_T / 2, 0.0, (DECK + top) / 2), (RAIL_T, 36.0 + 2 * RAIL_T, top - DECK), H.rails, "visual", H.n)
@@ -1200,14 +1199,12 @@ def hole13(H):  # Fat Man Jump: up the kicker ramp and over the muck to the isla
     H.cup = (cx + 6.0, 0.0)
 
 
-def hole14(H):  # Glowing Sea: a wide wavy lane over rolling ground, a sand trap and a toxic pool
+def hole14(H):  # Glowing Sea: a wide wavy lane over rolling ground and three sand traps
     H.shape([("A", 160, 30), ("A", 160, -60), ("A", 160, 30)], 40, circles=[(250, 0, 44)])
     L = H.path.length
     H.h = H.along(lambda s, d: 3.5 * (1.0 + math.sin(s / 24.0) * math.cos(d / 20.0)) * smoothstep(30, 60, s) * (1 - smoothstep(L - 60, L - 20, s)))  # (never below the deck)
-    pool = [H.p(150 + 18 * math.cos(a / 12 * math.tau), -18 + 13 * math.sin(a / 12 * math.tau)) for a in range(12)]
-    H.bunkers([(90, 16, 22, 13, 10), (215, -26, 12, 8, -30)])
-    H.lane(holes=[pool], grid=6.0)
-    ground(H.tag("Pool"), grown(pool, 8.0), flat, H.z0 - 3.0, H.coll, "Muck", "water", H.n)
+    H.bunkers([(90, 16, 22, 13, 10), (150, -18, 18, 12, 0), (215, -26, 12, 8, -30)])
+    H.lane(grid=6.0)
     H.cup = H.p(255)
 
 
