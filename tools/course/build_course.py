@@ -1067,7 +1067,7 @@ def hole06(H):  # Vertibird: up a slope and round a right-hand bend into the big
     with H.section(sc):
         P.rotor_head(H, z)
         ring_walls(H.tag("RotorMastWall"), H.coll, (0, 0), 9.0, z - 2, 14.0, H.n, 0.5, segments=14)
-        rotor = blades(H.tag("Rotor"), H.coll, 4, (46.0, 2.0, 1.0), (31.0, 0, 0), "Z", "OliveMetal", H.n)
+        rotor = blades(H.tag("Rotor"), H.coll, 1, (0.5, 0.5, 0.5), (0.0, 0, 0), "Z", "DarkMetal", H.n)  # (a stub: the parts are the rotor)
         rotor.location = (0.0, 0.0, z + 5.0)
         H.obstacle(rotor, "spin", period=-5.0, phase=0.0)
         for k in range(4):
@@ -1103,7 +1103,6 @@ def hole08(H):  # The Volcano: round a bend to the cone in the round green; too 
         r = math.hypot(x - c[0], y - c[1])
         return 22.0 * (1.0 - smoothstep(12.0, 52.0, r)) - (1.5 * (1.0 - (r / 12.0) ** 2) if r < 12 else 0.0)
     H.lane(h, grid=6.0)
-    P.volcano_rocks(H, c, DECK)
     H.cup = c
 
 
@@ -1233,10 +1232,11 @@ def hole16(H):  # Mr. Handy: a curving barbell, his three arms sweeping the big 
     H.lane(H.banked(lambda s, d: 6.0 * smoothstep(mid + 40, L - 10, s), 0.0))
     z = H.z(mid)
     with H.section(mid):
-        P.vanilla(H, "HandyStatue", "meshes/architecture/generalatomics/genatomicsgianthandy01.nif", (0, 0, z), height=42.0)
+        P.vanilla(H, "HandyStatue", "meshes/architecture/generalatomics/genatomicsgianthandy01.nif", (0, 0, z), height=42.0,
+                  skip=("IndFrameCat", "Floor", "Grate"))  # (not the Galleria's lattice tower that held him up)
         ring_walls(H.tag("HandyBodyWall"), H.coll, (0, 0), 9.0, z - 1, 10.0, H.n, 0.5, segments=12)
         P.collision_cyl(H.tag("HandyBlock"), H.coll, H.n, (0, 0, z), 12.0, 30.0)
-        arms = blades(H.tag("HandyArms"), H.coll, 3, (16.0, 1.0, 1.0), (19.0, 0, 0), "Z", "Chrome", H.n)
+        arms = blades(H.tag("HandyArms"), H.coll, 1, (0.5, 0.5, 0.5), (0.0, 0, 0), "Z", "Chrome", H.n)  # (a stub: the parts are the arms)
         arms.location = (0.0, 0.0, z + 3.0)
         H.obstacle(arms, "spin", period=4.5, phase=0.0)
         for k in range(3):

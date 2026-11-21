@@ -173,7 +173,10 @@ def _export(objs, root, path):
         o.select_set(True)
     bpy.context.view_layer.objects.active = root
     with _ctx():
-        bpy.ops.export_scene.pynifly(filepath=path, target_game="FO4", intuit_defaults=False, preserve_hierarchy=True)
+        # full-precision vertices: the game stores them as 16-bit half floats by default, which on a course this size
+        # (650 out from its middle) only lands every 0.25-0.5 units - enough to knock a 3.8-unit cup out of round
+        bpy.ops.export_scene.pynifly(filepath=path, target_game="FO4", intuit_defaults=False, preserve_hierarchy=True,
+                                     export_full_precision=True)
 
 
 def _scratch():

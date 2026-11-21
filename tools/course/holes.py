@@ -12,8 +12,8 @@ HOLES = [
     (3, 2, "Nuka Alley", "americana"),
     (4, 3, "Rust Ramp", "junk"),
     (5, 3, "Toxic Crossing", "glow"),
-    (6, 3, "Vertibird", "military"),
-    (7, 3, "Diner Dogleg", "americana"),
+    (6, 4, "Vertibird", "military"),
+    (7, 2, "Diner Dogleg", "americana"),
     (8, 3, "The Volcano", "junk"),
     (9, 3, "Vault Doors", "vault"),
     (10, 2, "Tire Yard", "junk"),
@@ -22,9 +22,9 @@ HOLES = [
     (13, 3, "The Fork", "military"),
     (14, 3, "Glowing Sea", "glow"),
     (15, 3, "Castle Gate", "americana"),
-    (16, 3, "Mr. Handy", "vault"),
+    (16, 4, "Mr. Handy", "vault"),
     (17, 3, "Zigzag", "americana"),
-    (18, 3, "Last Stop", "junk"),
+    (18, 2, "Last Stop", "junk"),
 ]
 
 assert len(HOLES) == 18

@@ -244,6 +244,10 @@ class Model:
                 if matrix is not None:
                     bm.transform(matrix)
                 bmesh.ops.remove_doubles(bm, verts=bm.verts[:], dist=0.002)
+                # every face outwards (a lathe or a sweep can wind its faces inwards: the game culls those, Blender
+                # draws them anyway). Open sheets (the canvas: two-sided by its two copies) left as they are
+                if mat != "Canvas":
+                    bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
                 bm.normal_update()
                 if not keep:
                     B.box_uv(bm, B.MATERIALS[mat][1] if mat in B.MATERIALS else 96.0)
@@ -322,11 +326,12 @@ def stripes_box(m, sx, sy, sz, matrix):
 _VANILLA = {}
 
 
-def vanilla(H, name, rel, at, height=None, width=None, lie=False, deg=0.0):
+def vanilla(H, name, rel, at, height=None, width=None, lie=False, deg=0.0, skip=()):
     """one of the game's own meshes in the hole, scaled to a height (or a width across) - its shapes keep the
     game's materials; visual only (no collision of its own). lie: turned onto its side (a tyre lying flat)."""
     import dressing
     parts = dressing.library_one(B._root, rel)
+    parts = [(o, m) for o, m in parts if not any(k in o.name or k in o.data.name for k in skip)]
     if not parts:
         return []
     rot = RX(90.0) if lie else Matrix.Identity(4)
@@ -715,26 +720,35 @@ def mr_handy(H, z):
 
 
 def handy_arms(H, arms):
-    """the three arms: jointed, a pincer, a saw and a flamer at their ends (the obstacle's frame: the hub at the origin)"""
+    """Mr. Handy's three arms, as the statue's own: rusted links between chrome joints, from a collar under him out
+    to a claw, a buzz saw and a flamer (the obstacle's frame: the hub at the origin, the arms along x at 0, 120, 240)"""
     m = Model(H.tag("HandyArmParts"), H.coll, H.n)
+    m.add("Chrome", lathe([(0.0, -1.2), (9.5, -1.2), (10.0, -0.6), (10.0, 0.6), (9.5, 1.2), (0.0, 1.2)], 30))
     for k in range(3):
         r = RZ(120 * k)
-        m.add("DarkMetal", cyl(1.4, 2.0, 10), r @ T(10.0, 0, -1.0))
-        m.add("Chrome", sweep([(10.0, 0, 0), (28.0, 0, 0)], [(math.cos(t) * 1.4, math.sin(t) * 1.4) for t in [math.tau * i / 10 for i in range(11)]]), r)
-        m.add("DarkMetal", sphere(2.0, 12, 8), r @ T(28.0, 0, 0))
-        m.add("Chrome", sweep([(28.0, 0, 0), (44.0, 0, 0)], [(math.cos(t) * 1.1, math.sin(t) * 1.1) for t in [math.tau * i / 10 for i in range(11)]]), r)
-        if k == 0:  # pincer
-            for s in (-1, 1):
-                m.add("DarkMetal", prism([(0, 0), (5, s * 2.5), (7, s * 1.0), (5, s * 0.5)], -0.6, 0.6), r @ T(44.0, 0, 0))
-        elif k == 1:  # buzz saw
+        for x0, x1 in ((9.0, 26.0), (26.0, 41.0)):
+            for side in (-1, 1):  # each link: a pair of side plates, as the statue's
+                m.add("Rust", box(x1 - x0, 0.8, 2.4, 0.3), r @ T((x0 + x1) / 2, side * 1.3, 0))
+            m.add("Rust", box(x1 - x0 - 4.0, 1.8, 1.2, 0.2), r @ T((x0 + x1) / 2, 0, 0))
+        for x in (26.0, 41.0):  # the joints: chrome drums with rusted caps
+            m.add("Chrome", cyl(2.3, 3.4, 16, bevel=0.3), r @ T(x, 0, -1.7))
+            m.add("Rust", cyl(1.2, 3.8, 12), r @ T(x, 0, -1.9))
+        if k == 0:  # the claw: two curved fingers
+            for side in (-1, 1):
+                pts = [(41.0 + 6.0 * math.sin(a), side * (1.5 + 2.5 * math.sin(a * 0.9)), 0.0) for a in [math.pi * i / 10 for i in range(11)]]
+                m.add("DarkMetal", sweep(pts, [(-0.5, -0.8), (0.5, -0.8), (0.5, 0.8), (-0.5, 0.8), (-0.5, -0.8)]), r)
+        elif k == 1:  # the buzz saw: a toothed blade on a hub
             ring = []
-            for i in range(24):
-                a = math.tau * i / 24
-                rr = 4.0 if i % 2 else 3.2
+            for i in range(32):
+                a = math.tau * i / 32
+                rr = 4.6 if i % 2 else 3.9
                 ring.append((rr * math.cos(a), rr * math.sin(a)))
-            m.add("Chrome", prism(ring, -0.3, 0.3), r @ T(46.0, 0, 0))
-        else:  # flamer nozzle
-            m.add("DarkMetal", cyl(1.6, 4.0, 10, 1.0), r @ T(44.0, 0, 0) @ RY(90))
+            m.add("Chrome", prism(ring, -0.25, 0.25), r @ T(46.0, 0, 0.6))
+            m.add("DarkMetal", cyl(1.2, 1.4, 12), r @ T(46.0, 0, -0.1))
+            m.add("Rust", box(4.0, 1.6, 1.0, 0.2), r @ T(43.5, 0, 0.0))
+        else:  # the flamer: a nozzle with a pilot light
+            m.add("DarkMetal", cyl(1.5, 6.0, 12, 0.9, bevel=0.2), r @ T(42.0, 0, 0) @ RY(90))
+            m.add("Flame", sphere(0.7, 8, 6), r @ T(48.4, 0, 0))
     parts = m.build(role="opart")
     return attach(parts, arms)
 
@@ -788,27 +802,38 @@ def volcano_rocks(H, c, z):
 
 
 def rotor_head(H, z):
-    """Hole 6: the vertibird's rotor mast: a tapered housing, a swashplate, cowling; olive drab"""
+    """Hole 6: the vertibird's rotor mast: a flanged base tapering up to a collar just under the hub; olive drab"""
     m = Model(H.tag("Mast"), H.coll, H.n)
-    m.add("OliveMetal", lathe([(9.0, 0.0), (9.0, 2.0), (7.0, 5.0), (6.0, 9.0), (4.0, 11.0), (0.0, 11.0)], 20, 0), T(0, 0, z - 4.0))
-    m.add("DarkMetal", cyl(3.0, 3.0, 16, bevel=0.4), T(0, 0, z + 6.5))
-    m.add("YellowMetal", torus(8.6, 0.6, 24, 6), T(0, 0, z - 2.0))
-    rivets(m, "DarkMetal", [(8.0 * math.cos(math.tau * k / 16), 8.0 * math.sin(math.tau * k / 16), z - 1.0) for k in range(16)], 0.5)
+    m.add("OliveMetal", lathe([(0.0, -4.0), (9.5, -4.0), (9.5, -2.5), (7.5, -1.0), (4.5, 1.5), (3.4, 3.0), (0.0, 3.0)], 24), T(0, 0, z))
+    m.add("DarkMetal", lathe([(0.0, -1.2), (8.2, -1.2), (8.2, -0.4), (0.0, -0.4)], 24), T(0, 0, z))  # (a dark band round the flange)
     return m.build()
 
 
 def rotor_blades(H, rotor):
-    """the blades: tapered aerofoils with yellow tips and a hub (parts of the spinning obstacle; its frame: the hub at
-    the origin, four blades along +-x/+-y)"""
+    """the rotor (parts of the spinning obstacle; its frame: the hub's middle at the origin): one hub - a bevelled
+    disc with a dome - and four tapered aerofoil blades running into it through grip sleeves, yellow tips"""
     m = Model(H.tag("RotorParts"), H.coll, H.n)
-    foil = [(-2.6, 0.0), (-1.5, 0.6), (1.0, 0.8), (2.6, 0.0), (1.0, -0.4), (-1.5, -0.4), (-2.6, 0.0)]
+    m.add("DarkMetal", lathe([(0.0, -1.6), (5.6, -1.6), (6.2, -1.0), (6.2, 1.0), (5.0, 1.6), (3.0, 2.6), (0.0, 3.0)], 24))
     for k in range(4):
         r = RZ(90 * k)
-        m.add("OliveMetal", sweep([(6.0, 0, 0), (52.0, 0, 0)], foil), r)
-        m.add("YellowMetal", sweep([(52.0, 0, 0), (58.0, 0, 0)], foil), r)
-        m.add("DarkMetal", box(5.0, 3.0, 2.4, 0.4), r @ T(7.0, 0, 0))
-    m.add("DarkMetal", cyl(5.0, 3.0, 20, bevel=0.6), T(0, 0, -1.5))
-    m.add("DarkMetal", sphere(2.6, 12, 8), T(0, 0, 1.5) @ S(1, 1, 0.7))
+        root = [(-1.8, 0.0), (-1.0, 0.45), (0.8, 0.55), (1.8, 0.0), (0.8, -0.3), (-1.0, -0.3), (-1.8, 0.0)]
+        tip = [(x * 1.35, y * 1.1) for x, y in root]
+        # the blade: a sweep that widens from the root to its tip
+        bm = bmesh.new()
+        rings = []
+        for i, sx in enumerate((4.0, 20.0, 52.0)):
+            prof = root if i == 0 else tip
+            rings.append([bm.verts.new((sx, py, pz)) for py, pz in prof[:-1]])
+        n = len(rings[0])
+        for a, b in zip(rings, rings[1:]):
+            for j in range(n):
+                bm.faces.new((a[j], a[(j + 1) % n], b[(j + 1) % n], b[j]))
+        bm.faces.new(list(reversed(rings[0])))
+        bm.faces.new(rings[-1])
+        bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+        m.add("OliveMetal", bm, r)
+        m.add("YellowMetal", box(5.0, 4.8, 1.0, 0.3), r @ T(55.0, 0, 0.1))
+        m.add("DarkMetal", cyl(1.4, 9.0, 12, bevel=0.3), r @ T(4.0, 0, 0) @ RY(90))
     parts = m.build(role="opart")
     return attach(parts, rotor)
 
@@ -849,12 +874,10 @@ def sign(hole, coll, x, y, z, facing):
 
 
 def tee_mat(H, x, y, z, a):
-    """a rubber tee mat set into the carpet, with two white tee spots"""
+    """a rubber tee mat on the carpet"""
     m = Model(H.tag("Tee"), H.coll, H.n)
     mm = T(x, y, z) @ RZ(math.degrees(a))
     m.add("Rubber", box(16.0, 13.0, 0.5, 0.2), mm @ T(0, 0, 0.1))
-    for dy in (-3.0, 3.0):
-        m.add("WhiteMetal", cyl(0.9, 0.15, 16), mm @ T(0, dy, 0.42))  # (clear of the mat's top at 0.35: no flicker)
     return m.build()
 
 
