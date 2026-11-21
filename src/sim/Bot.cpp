@@ -230,8 +230,8 @@ namespace golf
             }
             return (s - 2.0) * 1.732;
 		};
-		const double aimSigma = (0.5 + (1.0 - a_skill) * 10.0) * 0.017453292519943295;
-		const double speedSigma = 0.04 + (1.0 - a_skill) * 0.35;
+		const double aimSigma = (0.3 + (1.0 - a_skill) * 2.5) * 0.017453292519943295;
+		const double speedSigma = 0.03 + (1.0 - a_skill) * 0.3;
 		const double gain = before - (best.end == BallState::kInCup ? 0.0 : Distance(best.rest));
 		for (int tries = 0; tries < 10; ++tries) {
 			const double da = gauss() * aimSigma;

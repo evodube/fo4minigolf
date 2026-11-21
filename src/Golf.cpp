@@ -661,6 +661,19 @@ namespace mg
 		}
 		_phaseTime += a_dt;
 		_shotSoundGap = std::max(0.0f, _shotSoundGap - a_dt);
+		// a settler's putt due this frame: the ball's world stepped to that very moment and the putt played there, as
+		// it was planned (a frame late, a moving obstacle is somewhere else)
+		if (_oppTurn && _phase == Phase::kAim && _strikeAt >= 0.0 && _strikeAt <= _clock && !_sim->Moving()) {
+			if (_strikeAt > _sim->Time()) {
+				ShotEvents(_sim->Step(_strikeAt - _sim->Time()));
+			}
+			if (!_sim->Moving()) {
+				_strikeAt = -1.0;
+				const float loud = static_cast<float>(std::clamp(_oppShot.speed / Settings::Get().spec.maxSpeed, 0.0, 1.0));
+				Strike(_oppShot.dir, _oppShot.speed, 0.35f + 0.65f * loud);
+				log::info("{}: putt {} on hole {}", _opponentName, _stroke, _course.holes[_hole].number);
+			}
+		}
 		// the ball's clock keeps up with the obstacles' (they go by _clock, the ball's world by the sim's own)
 		const double behind = _clock - _sim->Time();
 		if (behind > 0.0) {
@@ -975,12 +988,7 @@ namespace mg
 			log::info("{}: putt {} planned at {:.0f} units/s (in {:.1f} s)", _opponentName, _stroke + 1, shot.speed, _strikeAt - _clock);
 			return;
 		}
-		if (_clock >= _strikeAt) {
-			_strikeAt = -1.0;
-			const float loud = static_cast<float>(std::clamp(_oppShot.speed / Settings::Get().spec.maxSpeed, 0.0, 1.0));
-			Strike(_oppShot.dir, _oppShot.speed, 0.35f + 0.65f * loud);
-			log::info("{}: putt {} on hole {}", _opponentName, _stroke, _course.holes[_hole].number);
-		}
+		// (the putt itself: TickPlay, at the very moment)
 	}
 
 	void Golf::PlanOpponentShot()
@@ -991,7 +999,7 @@ namespace mg
 		_plan = plan;
 		const golf::Hole* hole = &_course.holes[_hole];
 		const bool        moving = !hole->obstacles.empty();
-		_planFrom = _clock;  // (with moving obstacles, late means a mistimed putt: worked out again, further ahead)
+		_planFrom = _sim->Time();  // (with moving obstacles, late means a mistimed putt: worked out again, further ahead)
 		_planLead = (moving ? 3.0 : 1.8) + 2.5 * _planTries;
 		const double        lead = _planLead;
 		const golf::Spec    spec = Settings::Get().spec;

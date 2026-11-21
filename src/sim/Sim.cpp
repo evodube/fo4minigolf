@@ -166,11 +166,15 @@ namespace golf
 
 	std::vector<Event> Sim::Step(double a_dt)
 	{
+		// Whole substeps only, their size set by the ball alone (never cut short to land on a_dt): the same shot comes
+		// out the same however the time is handed over - the game's frames, or a settler's planning in 1/100 s steps.
+		// (Cut to fit the frames, the substeps differed, and a long banked putt planned on a copy went elsewhere in
+		// the game.) The ball's time can run up to one substep past the caller's; the next call takes it back up.
 		std::vector<Event> events;
-		double             left = a_dt;
-		while (left > 1e-12) {
+		_target += a_dt;
+		while (_time < _target - 1e-12) {
 			if (_state == BallState::kInCup || _state == BallState::kWater || _state == BallState::kOut) {
-				_time += left;  // the ball is done; the obstacles keep going
+				_time = _target;  // the ball is done; the obstacles keep going
 				break;
 			}
 			double h;
@@ -180,9 +184,7 @@ namespace golf
 				const double speed = std::max(_vel.Length(), 1.0);
 				h = std::min(kMaxStep, kMaxTravelPerStep * _spec.ballRadius / speed);
 			}
-			h = std::min(h, left);
 			SubStep(h, events);
-			left -= h;
 		}
 		return events;
 	}

@@ -95,8 +95,9 @@ namespace golf
 		const Vec3& Pos() const { return _pos; }
 		const Vec3& Vel() const { return _vel; }
 		const Quat& Rot() const { return _rot; }
-		double      Time() const { return _time; }
-		void        SetTime(double a_time) { _time = a_time; }
+		// the time the caller has stepped to (the ball's own may be up to one substep past it: see Step)
+		double      Time() const { return _target; }
+		void        SetTime(double a_time) { _time = _target = a_time; }
 
 		// An obstacle's pose now (for the game to move its mesh): see Obstacle::Pose.
 		void ObstaclePose(int a_index, double& a_angle, Vec2& a_offset, double& a_lift) const;
@@ -130,7 +131,8 @@ namespace golf
 		Vec3        _vel;
 		Quat        _rot;
 		const Tri*  _ground{ nullptr };
-		double      _time{ 0.0 };
+		double      _time{ 0.0 };    // the ball's world's own time: whole substeps
+		double      _target{ 0.0 };  // where the caller has asked it to step to
 		double      _shotTime{ 0.0 };
 	};
 }
