@@ -110,26 +110,62 @@ def texture_file(base, suffix):
     return os.path.join(_root, "vanilla", *rel.split("/"))
 
 
+# how strongly each material's specular map shines (the shader's Specular Strength); the rest 0.5
+SPEC = {"Turf": 0.15, "Sand": 0.1, "Lawn": 0.1, "Paving": 0.2, "Concrete": 0.2, "Brick": 0.25, "Stone": 0.25,
+        "CastleStone": 0.25, "Muck": 1.2, "Chrome": 1.2, "Glass": 1.2, "DarkMetal": 0.8, "Signs": 0.3, "Rubber": 0.3,
+        "Canvas": 0.1, "Guide": 0.2}
+
+TEMPLATE_NIF = "meshes/landscape/rocks/rockboulder01.nif"  # a plain vanilla static: only its shader block is used
+
+
+def template_material():
+    """a BSLightingShaderProperty material as PyNifly imports one from a vanilla static (as Wasteland Wagers does):
+    with a plain Blender material PyNifly writes odd shader settings (own emit, a Skyrim-only flag, shiny), which
+    the game lights wrongly - dark and light patches across the carpet"""
+    if "MG_template" in bpy.data.materials:
+        return bpy.data.materials["MG_template"]
+    import dressing
+    parts = dressing.library_one(_root, TEMPLATE_NIF)
+    mat = parts[0][0].data.materials[0].copy()
+    mat.name = "MG_template"
+    mat.use_fake_user = True
+    return mat
+
+
 def material(name):
     if name in bpy.data.materials:
         return bpy.data.materials[name]
     base, _scale, ns = MATERIALS[name]
-    mat = bpy.data.materials.new(name)
-    mat.use_nodes = True
-    nt = mat.node_tree
-    bsdf = nt.nodes["Principled BSDF"]
-    img = nt.nodes.new("ShaderNodeTexImage")
-    path = texture_file(base, "d")
-    if os.path.exists(path):
-        img.image = bpy.data.images.load(path, check_existing=True)
-    else:
-        img.image = bpy.data.images.new(os.path.basename(path), 4, 4)
-        img.image.filepath = path
-    nt.links.new(img.outputs["Color"], bsdf.inputs["Base Color"])
-    bsdf.inputs["Roughness"].default_value = 0.85
+    mat = template_material().copy()
+    mat.name = name
+    mat.use_fake_user = False
+    for k in list(mat.keys()):
+        if k.startswith("BSShaderTextureSet_"):
+            del mat[k]
     other = ns or base
+    mat["BSShaderTextureSet_Diffuse"] = f"textures\\{base}_d.dds".replace("/", "\\")
     mat["BSShaderTextureSet_Normal"] = f"textures\\{other}_n.dds".replace("/", "\\")
     mat["BSShaderTextureSet_Specular"] = f"textures\\{other}_s.dds".replace("/", "\\")
+    mat["BSLSP_Shader_Name"] = ""  # (no .bgsm: the shader block's own settings)
+    sh = mat.pyn_shader
+    sh.Shader_Flags_1 = "SPECULAR | CAST_SHADOWS | ZBUFFER_TEST"
+    sh.Shader_Flags_2 = "ZBUFFER_WRITE"
+    sh.Shader_Type = "Default"
+    sh.Spec_Str = SPEC.get(name, 0.5)
+    # the textures repeat (the template, a rock, clamps them: the shader's clamp mode comes from these)
+    uvc = mat.node_tree.nodes.get("UV_Converter")
+    if uvc is not None:
+        for k in ("Wrap U", "Wrap V"):
+            if k in uvc.inputs:
+                uvc.inputs[k].default_value = 1
+    # the colour map in the node for Blender's previews (the export goes by the texture set above)
+    for n in mat.node_tree.nodes:
+        if n.bl_idname == "ShaderNodeTexImage":
+            n.image = None
+    node = mat.node_tree.nodes.get("Diffuse_Texture")
+    path = texture_file(base, "d")
+    if node is not None and os.path.exists(path):
+        node.image = bpy.data.images.load(path, check_existing=True)
     return mat
 
 

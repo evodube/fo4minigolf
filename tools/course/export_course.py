@@ -196,6 +196,23 @@ def _root(coll, name, collision=None):
     return r
 
 
+def game_normals(bm):
+    bm.normal_update()
+    hard = [e for e in bm.edges if len(e.link_faces) == 2 and (e.calc_face_angle(0.0) > math.radians(30.0) or not e.smooth)]
+    bmesh.ops.split_edges(bm, edges=hard)
+    bmesh.ops.triangulate(bm, faces=bm.faces[:], quad_method="BEAUTY", ngon_method="BEAUTY")
+    for f in bm.faces:
+        f.smooth = True
+
+
+def game_normals_mesh(me):
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    game_normals(bm)
+    bm.to_mesh(me)
+    bm.free()
+
+
 def _joined(name, coll, mat_name, parts):
     bm = bmesh.new()
     for ob in parts:
@@ -208,6 +225,10 @@ def _joined(name, coll, mat_name, parts):
     # (the game's own props come with vertex groups - their segments - that mean nothing once merged)
     for layer in list(bm.verts.layers.deform.values()):
         bm.verts.layers.deform.remove(layer)
+    # the game lights by per-vertex normals: hard edges (over 30 degrees, or marked sharp, or between flat-shaded
+    # faces of a box) split so their faces keep their own normals, not one averaged across a corner (the rails'
+    # and boxes' dark gradients); every face triangulated properly
+    game_normals(bm)
     me = bpy.data.meshes.new(name)
     bm.to_mesh(me)
     bm.free()
@@ -277,6 +298,7 @@ def export_course_nif(root_dir):
         coll.objects.link(node)
         node.matrix_world = ob.matrix_world.copy()
         me = bpy.data.meshes.new_from_object(ob.evaluated_get(bpy.context.evaluated_depsgraph_get()))
+        game_normals_mesh(me)
         mesh = bpy.data.objects.new(ob.name + "Mesh", me)
         coll.objects.link(mesh)
         mesh.parent = node
@@ -288,6 +310,7 @@ def export_course_nif(root_dir):
                 continue
             pm = bpy.data.meshes.new_from_object(part.evaluated_get(bpy.context.evaluated_depsgraph_get()))
             pm.transform(inv @ part.matrix_world)
+            game_normals_mesh(pm)
             po = bpy.data.objects.new(part.name + "Mesh", pm)
             coll.objects.link(po)
             po.parent = node
@@ -316,6 +339,7 @@ def export_single(root_dir, ob, rel):
     """one object as its own nif: its mesh in its own space (origin = the object's origin, no turn)"""
     coll = _scratch()
     me = bpy.data.meshes.new_from_object(ob.evaluated_get(bpy.context.evaluated_depsgraph_get()))
+    game_normals_mesh(me)
     copy = bpy.data.objects.new(ob.name.split("_")[-1], me)
     coll.objects.link(copy)
     root = _root(coll, ob.name)
@@ -357,10 +381,13 @@ def make_ball_and_putter():
         bmesh.ops.translate(bm, vec=(0, 1.5, 0.2), verts=bm.verts)
         B.finish(bm, "Guide")
         ob = B.new_object("Dot", bm, coll, "Guide", mg_role="kit", mg_hidden=1, mg_line=1)
-        bsdf = B.material("Guide").node_tree.nodes.get("Principled BSDF")
-        if bsdf:
-            bsdf.inputs["Emission Color"].default_value = (0.25, 1.0, 0.35, 1.0)
-            bsdf.inputs["Emission Strength"].default_value = 0.6
+        gm = B.material("Guide")
+        gm.pyn_shader.Shader_Flags_1 = "SPECULAR | CAST_SHADOWS | ZBUFFER_TEST | OWN_EMIT"
+        for n in gm.node_tree.nodes:
+            if "Emission Strength" in getattr(n, "inputs", {}):
+                n.inputs["Emission Strength"].default_value = 0.6
+            if "Emission Color" in getattr(n, "inputs", {}):
+                n.inputs["Emission Color"].default_value = (0.25, 1.0, 0.35, 1.0)
     return bpy.data.objects["Ball"], bpy.data.objects["Putter"]
 
 
