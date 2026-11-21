@@ -818,7 +818,9 @@ namespace mg
 		root->SetLocalTransform(local);
 		RE::NiUpdateData update;
 		root->Update(update);
-		a_ref->data.location = a_pos;
+		a_ref->data.location.x = a_pos.x;
+		a_ref->data.location.y = a_pos.y;
+		a_ref->data.location.z = a_pos.z;
 	}
 
 	void Golf::PlaceObjects()
