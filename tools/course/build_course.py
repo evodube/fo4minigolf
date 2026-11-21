@@ -1232,11 +1232,10 @@ def hole16(H):  # Mr. Handy: a curving barbell, his three arms sweeping the big 
     H.lane(H.banked(lambda s, d: 6.0 * smoothstep(mid + 40, L - 10, s), 0.0))
     z = H.z(mid)
     with H.section(mid):
-        P.vanilla(H, "HandyStatue", "meshes/architecture/generalatomics/genatomicsgianthandy01.nif", (0, 0, z), height=42.0,
-                  skip=("IndFrameCat", "Floor", "Grate"))  # (not the Galleria's lattice tower that held him up)
+        P.vanilla(H, "HandyStatue", "meshes/architecture/generalatomics/genatomicsgianthandy01.nif", (0, 0, z), height=42.0)
         ring_walls(H.tag("HandyBodyWall"), H.coll, (0, 0), 9.0, z - 1, 10.0, H.n, 0.5, segments=12)
         P.collision_cyl(H.tag("HandyBlock"), H.coll, H.n, (0, 0, z), 12.0, 30.0)
-        arms = blades(H.tag("HandyArms"), H.coll, 1, (0.5, 0.5, 0.5), (0.0, 0, 0), "Z", "Chrome", H.n)  # (a stub: the parts are the arms)
+        arms = blades(H.tag("HandyArms"), H.coll, 3, (16.0, 1.0, 1.0), (19.0, 0, 0), "Z", "Chrome", H.n)
         arms.location = (0.0, 0.0, z + 3.0)
         H.obstacle(arms, "spin", period=4.5, phase=0.0)
         for k in range(3):

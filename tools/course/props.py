@@ -720,35 +720,26 @@ def mr_handy(H, z):
 
 
 def handy_arms(H, arms):
-    """Mr. Handy's three arms, as the statue's own: rusted links between chrome joints, from a collar under him out
-    to a claw, a buzz saw and a flamer (the obstacle's frame: the hub at the origin, the arms along x at 0, 120, 240)"""
+    """the three arms: jointed, a pincer, a saw and a flamer at their ends (the obstacle's frame: the hub at the origin)"""
     m = Model(H.tag("HandyArmParts"), H.coll, H.n)
-    m.add("Chrome", lathe([(0.0, -1.2), (9.5, -1.2), (10.0, -0.6), (10.0, 0.6), (9.5, 1.2), (0.0, 1.2)], 30))
     for k in range(3):
         r = RZ(120 * k)
-        for x0, x1 in ((9.0, 26.0), (26.0, 41.0)):
-            for side in (-1, 1):  # each link: a pair of side plates, as the statue's
-                m.add("Rust", box(x1 - x0, 0.8, 2.4, 0.3), r @ T((x0 + x1) / 2, side * 1.3, 0))
-            m.add("Rust", box(x1 - x0 - 4.0, 1.8, 1.2, 0.2), r @ T((x0 + x1) / 2, 0, 0))
-        for x in (26.0, 41.0):  # the joints: chrome drums with rusted caps
-            m.add("Chrome", cyl(2.3, 3.4, 16, bevel=0.3), r @ T(x, 0, -1.7))
-            m.add("Rust", cyl(1.2, 3.8, 12), r @ T(x, 0, -1.9))
-        if k == 0:  # the claw: two curved fingers
-            for side in (-1, 1):
-                pts = [(41.0 + 6.0 * math.sin(a), side * (1.5 + 2.5 * math.sin(a * 0.9)), 0.0) for a in [math.pi * i / 10 for i in range(11)]]
-                m.add("DarkMetal", sweep(pts, [(-0.5, -0.8), (0.5, -0.8), (0.5, 0.8), (-0.5, 0.8), (-0.5, -0.8)]), r)
-        elif k == 1:  # the buzz saw: a toothed blade on a hub
+        m.add("DarkMetal", cyl(1.4, 2.0, 10), r @ T(10.0, 0, -1.0))
+        m.add("Chrome", sweep([(10.0, 0, 0), (28.0, 0, 0)], [(math.cos(t) * 1.4, math.sin(t) * 1.4) for t in [math.tau * i / 10 for i in range(11)]]), r)
+        m.add("DarkMetal", sphere(2.0, 12, 8), r @ T(28.0, 0, 0))
+        m.add("Chrome", sweep([(28.0, 0, 0), (44.0, 0, 0)], [(math.cos(t) * 1.1, math.sin(t) * 1.1) for t in [math.tau * i / 10 for i in range(11)]]), r)
+        if k == 0:  # pincer
+            for s in (-1, 1):
+                m.add("DarkMetal", prism([(0, 0), (5, s * 2.5), (7, s * 1.0), (5, s * 0.5)], -0.6, 0.6), r @ T(44.0, 0, 0))
+        elif k == 1:  # buzz saw
             ring = []
-            for i in range(32):
-                a = math.tau * i / 32
-                rr = 4.6 if i % 2 else 3.9
+            for i in range(24):
+                a = math.tau * i / 24
+                rr = 4.0 if i % 2 else 3.2
                 ring.append((rr * math.cos(a), rr * math.sin(a)))
-            m.add("Chrome", prism(ring, -0.25, 0.25), r @ T(46.0, 0, 0.6))
-            m.add("DarkMetal", cyl(1.2, 1.4, 12), r @ T(46.0, 0, -0.1))
-            m.add("Rust", box(4.0, 1.6, 1.0, 0.2), r @ T(43.5, 0, 0.0))
-        else:  # the flamer: a nozzle with a pilot light
-            m.add("DarkMetal", cyl(1.5, 6.0, 12, 0.9, bevel=0.2), r @ T(42.0, 0, 0) @ RY(90))
-            m.add("Flame", sphere(0.7, 8, 6), r @ T(48.4, 0, 0))
+            m.add("Chrome", prism(ring, -0.3, 0.3), r @ T(46.0, 0, 0))
+        else:  # flamer nozzle
+            m.add("DarkMetal", cyl(1.6, 4.0, 10, 1.0), r @ T(44.0, 0, 0) @ RY(90))
     parts = m.build(role="opart")
     return attach(parts, arms)
 
