@@ -787,24 +787,6 @@ def volcano_rocks(H, c, z):
     return m.build()
 
 
-def fat_man(H, z):
-    """Hole 13: a mini nuke on a cradle by the tee: a fat round body, a tail with a ring of fins"""
-    m = Model(H.tag("Nuke"), H.coll, H.n)
-    prof = [(0.0, -16.0), (3.0, -15.6), (6.2, -13.5), (7.2, -10.0), (7.2, 2.0), (6.4, 6.0), (4.5, 9.0), (3.0, 10.0), (3.0, 16.0), (0.0, 16.0)]
-    body = lathe(prof, 24)
-    mrot = T(0, 0, z + 10.0) @ RY(90)
-    m.add("OliveMetal", body, mrot)
-    m.add("YellowMetal", lathe([(7.25, -7.0), (7.3, -6.0), (7.3, -4.0), (7.25, -3.0)], 24), mrot)
-    for k in range(4):
-        fin = prism([(0, 0), (6.0, 0), (6.0, 2.0), (0, 6.0)], -0.4, 0.4, 0.1)
-        m.add("OliveMetal", fin, mrot @ RZ(45 + 90 * k) @ T(2.8, 0, 10.0) @ RX(90))
-    m.add("OliveMetal", tube(6.5, 3.0, 0.5, 20), mrot @ T(0, 0, 13.0))
-    # the cradle
-    for x in (-6.0, 6.0):
-        m.add("DarkWood", box(2.5, 16.0, 4.0, 0.3), T(x, 0, z + 2.0))
-    return m.build()
-
-
 def rotor_head(H, z):
     """Hole 6: the vertibird's rotor mast: a tapered housing, a swashplate, cowling; olive drab"""
     m = Model(H.tag("Mast"), H.coll, H.n)
@@ -873,34 +855,6 @@ def tee_mat(H, x, y, z, a):
     m.add("Rubber", box(16.0, 13.0, 0.5, 0.2), mm @ T(0, 0, 0.1))
     for dy in (-3.0, 3.0):
         m.add("WhiteMetal", cyl(0.9, 0.15, 16), mm @ T(0, dy, 0.42))  # (clear of the mat's top at 0.35: no flicker)
-    return m.build()
-
-
-def bridge(H, s0, s1, half):
-    """Hole 5: the humped bridge's timber sides: a fascia board each side under the deck's edge, posts down into the
-    muck, a rope rail between the posts' heads (all below the ball's way or outside it)"""
-    m = Model(H.tag("Bridge"), H.coll, H.n)
-    n = 24
-    for side in (-1, 1):
-        d = side * (half + 0.4)
-        edge = []
-        for k in range(n + 1):
-            s = s0 + (s1 - s0) * k / n
-            x, y = H.p(s, d)
-            edge.append((x, y, H.z(s, side * (half - 0.5))))
-        m.add("DarkWood", sweep(edge, [(-0.5, -4.0), (0.5, -4.0), (0.5, 0.3), (-0.5, 0.3), (-0.5, -4.0)]))
-        for k in range(0, n + 1, 4):
-            s = s0 + (s1 - s0) * k / n
-            x, y = H.p(s, side * (half + 1.6))
-            zt = H.z(s, side * half)
-            m.add("DarkWood", box(2.2, 2.2, zt + 9.0 - (H.z0 - 6.0), 0.3), T(x, y, (zt + 9.0 + H.z0 - 6.0) / 2))
-        rope = []
-        for k in range(n + 1):
-            s = s0 + (s1 - s0) * k / n
-            x, y = H.p(s, side * (half + 1.6))
-            sag = 1.6 * abs(math.sin(math.pi * (k % 4) / 4))
-            rope.append((x, y, H.z(s, side * half) + 8.0 - sag))
-        m.add("Canvas", sweep(rope, [(math.cos(a) * 0.45, math.sin(a) * 0.45) for a in [math.tau * i / 6 for i in range(7)]]))
     return m.build()
 
 

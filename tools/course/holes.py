@@ -19,7 +19,7 @@ HOLES = [
     (10, 2, "Tire Yard", "junk"),
     (11, 2, "The Drop", "vault"),
     (12, 3, "Wrecking Ball", "junk"),
-    (13, 3, "Fat Man Jump", "military"),
+    (13, 3, "The Fork", "military"),
     (14, 3, "Glowing Sea", "glow"),
     (15, 3, "Castle Gate", "americana"),
     (16, 3, "Mr. Handy", "vault"),

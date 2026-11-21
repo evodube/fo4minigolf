@@ -44,7 +44,7 @@ game's textures where it has a fitting one, and our own for the carpet, signs, r
 | 10 | Tire Yard | 2 | ramp up to a clover | bouncy tyres |
 | 11 | The Drop | 2 | steep covered chute, bend at the bottom | |
 | 12 | Wrecking Ball | 3 | banked hairpin | a crane and swinging wrecking ball |
-| 13 | Fat Man Jump | 3 | kicker ramp, island green | a jump over a sand trap, a mini nuke on its cradle |
+| 13 | The Fork | 3 | a straight that splits round a planter | a hump on the left route, a bunker on the right |
 | 14 | Glowing Sea | 3 | wide wave | rolling ground, three sand bunkers |
 | 15 | Castle Gate | 3 | ramp up, through the gate, bend | the gatehouse and a rising portcullis |
 | 16 | Mr. Handy | 3 | curving barbell | his three arms sweeping the green, a bunker by the cup |

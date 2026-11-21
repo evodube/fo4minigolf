@@ -1171,32 +1171,25 @@ def hole12(H):  # Wrecking Ball: a banked hairpin, the ball swinging over the fi
     H.sign_side = -1
 
 
-def hole13(H):  # Fat Man Jump: up the kicker ramp and over the sand trap to the island green
+def hole13(H):  # The Fork: the lane splits round a planter - over a hump on the left, past a bunker on the right
     import props as P
-    H.path = Path([("L", 175)])
-    H.half = 18.0
-    # the lane: round at the tee, cut square at the ramp's lip, no rail across the lip
-    start = [(18 * math.cos(a), 18 * math.sin(a)) for a in [math.pi / 2 + math.pi * k / 12 for k in range(13)]]
-    H.poly = ccw([(175, -18), (175, 18)] + start)
-    ramp = H.along(lambda s, d: 18.0 * smoothstep(115.0, 170.0, s))
-    H.h = lambda x, y: ramp(x, y) if x <= 176.0 else 0.0  # (past the lip: the island, flat)
-    ground(H.tag("Green"), H.poly, H.h, H.z0, H.coll, "Turf", "green", H.n)
-    open_rail = [(175, 18)] + start + [(175, -18)]
-    rail(H.tag("GreenRail"), open_rail, H.h, H.z0, DECK, H.coll, H.rails, H.n, closed=False, cap=H.trim)
-    # the island: a round green 40 past the lip, its rail open towards the ramp
-    cx, r = 250.0, 36.0
-    island = [(cx + r * math.cos(a), r * math.sin(a)) for a in [math.tau * k / 40 for k in range(40)]]
-    ground(H.tag("Island"), island, flat, H.z0, H.coll, "Turf", "green", H.n)
-    arc = [(cx + r * math.cos(a), r * math.sin(a)) for a in [math.radians(-145 + 290 * k / 30) for k in range(31)]]
-    rail(H.tag("IslandRail"), arc, flat, H.z0, DECK, H.coll, H.rails, H.n, closed=False, cap=H.trim)
-    # the gap before the island: a sand trap at the island's level (land short and you play out of the sand)
-    ground(H.tag("Trap"), [(176, -40), (cx, -40), (cx, 40), (176, 40)], flat, H.z0 - 0.25, H.coll, "Sand", "sand", H.n, grid=6.0)
-    # the lip's face: closed, the rail's material, from the ground up to the ramp's top
-    top = H.z0 + 18.0
-    box(H.tag("LipFace"), H.coll, (175.0 + RAIL_T / 2, 0.0, (DECK + top) / 2), (RAIL_T, 36.0 + 2 * RAIL_T, top - DECK), H.rails, "visual", H.n)
-    with H.section(60, 42):
-        P.fat_man(H, DECK)
-    H.cup = (cx + 6.0, 0.0)
+    H.shape([("L", 252)], 30, circles=[(252, 0, 34)])
+    mid, rx, ry = 135.0, 34.0, 9.0
+    H.bunkers([(mid, -22, 14, 4.5, 0)])
+    H.lane(H.along(lambda s, d: 6.0 * math.exp(-((s - mid) / 22.0) ** 2) * smoothstep(12.0, 22.0, d)
+                   + 8.0 * smoothstep(175.0, 225.0, s)))
+    # the planter: an oval of rail round a bed of earth
+    oval = [H.p(mid + rx * math.cos(a), ry * math.sin(a)) for a in [math.tau * k / 28 for k in range(28)]]
+    rail(H.tag("Planter"), oval, H.h, H.z0, DECK, H.coll, H.rails, H.n, cap=H.trim)
+    cxy = H.p(mid)
+
+    def mound(x, y):  # full to the rim, heaped up in the middle (a filled planter, not a pit)
+        lx, ly = (x - cxy[0]), (y - cxy[1])
+        q = min(1.0, (lx / rx) ** 2 + (ly / ry) ** 2)
+        return H.h(x, y) + RAIL_H + 0.6 + 4.0 * (1.0 - q)
+    bed = ground(H.tag("PlanterBed"), oval, mound, H.z0, H.coll, "Lawn", "green", H.n, grid=4.0)
+    bed["mg_role"] = "visual"
+    H.cup = H.p(258)
 
 
 def hole14(H):  # Glowing Sea: a wide wavy lane over rolling ground and three sand traps
