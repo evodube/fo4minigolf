@@ -313,6 +313,37 @@ namespace golf
 		const Vec3   from = a_sim.Pos();
 		const double before = Distance(from);
 		const int    dirs = _hole->obstacles.empty() ? 48 : 36;
+		a_skill = std::clamp(a_skill, 0.0, 1.0);
+		std::uint32_t rng0 = a_seed * 2654435761u + 12345u;
+
+		// Close, with the cup in plain sight (no wall, gap or water between): straight at it, always - only the
+		// weight theirs to get right. Of the weights that drop it, the middle one (the most forgiving); off by their
+		// skill in weight alone. (If no weight down that line drops it - an obstacle sweeping across - the usual way.)
+		const Vec2   toCup = _hole->cup.XY() - from.XY();
+		const double cupDist = toCup.Length();
+		if (cupDist > 1.0 && cupDist < 90.0 && Clear(from.XY(), _hole->cup.XY(), from.z)) {
+			const Vec2          dir = Unit(toCup);
+			std::vector<double> drops;
+			for (int k = 0; k < 48; ++k) {
+				const double speed = 8.0 * std::pow(_spec.maxSpeed * 0.8 / 8.0, k / 47.0);
+				if (Try(a_sim, dir, speed, 0.0).end == BallState::kInCup) {
+					drops.push_back(speed);
+				}
+			}
+			if (!drops.empty()) {
+				const double mid = drops[drops.size() / 2];
+				double       s = 0.0;
+				for (int i = 0; i < 4; ++i) {
+					s += (Next(rng0) % 10001) / 10000.0;
+				}
+				const double off = std::clamp(1.0 + (s - 2.0) * 1.732 * (0.02 + (1.0 - a_skill) * 0.2), 0.7, 1.35);
+				Shot shot = Try(a_sim, dir, mid * off, 0.0);
+				if (shot.end == BallState::kWater || shot.end == BallState::kOut) {
+					shot = Try(a_sim, dir, mid, 0.0);  // (never a miss that costs a stroke this close)
+				}
+				return shot;
+			}
+		}
 		// the route, as a golfer reads it: round the bends, at the furthest point of it in sight (the cup, if it is)
 		const Vec2 aim = RouteAim(from);
 		// putts along that line, give or take 35 degrees (the slopes and banks bend it), their weight what gets
@@ -330,7 +361,6 @@ namespace golf
 			best = Try(a_sim, aim, std::clamp(before * 1.4, 60.0, _spec.maxSpeed * 0.7), 0.0);
 		}
 		// their miss: off line and weight by skill, kept only if it still gains ground and stays out of trouble
-		a_skill = std::clamp(a_skill, 0.0, 1.0);
 		std::uint32_t rng = a_seed * 747796405u + 2891336453u;
 		const auto    gauss = [&]() {
             double s = 0.0;  // (near enough normal: the sum of four uniforms)

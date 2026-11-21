@@ -49,6 +49,8 @@ namespace golf
 		// A settler's putt: the best shot that heads the cup's way (no going back or off round the course), then put a
 		// little off line and weight by a_skill (0..1), the miss kept only if it still gets them nearer the cup and
 		// stays out of the hazards (else the true shot). Never a shot that loses ground when one that gains exists.
+		// Close to the cup (under 90 units) with nothing between: straight at it, always, the weight that drops it
+		// (the middle of those that do), off in weight alone by skill.
 		Shot Settler(const Sim& a_sim, double a_skill, std::uint32_t a_seed, int a_threads = 1) const;
 
 		// Plays a shot on a copy and says how it ends.
