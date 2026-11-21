@@ -89,6 +89,57 @@ def library(root):
     return out
 
 
+_ONE = {}
+
+
+def library_one(root, rel):
+    """one prop's meshes, imported once per build (as library() does): [(mesh object, its matrix in the prop)]"""
+    parts = _ONE.get(rel)
+    if parts:
+        try:
+            parts[0][0].name  # (still there: a new build wipes the scene)
+            return parts
+        except ReferenceError:
+            pass
+    path = os.path.join(root, "vanilla", *rel.split("/"))
+    if not os.path.exists(path) and os.path.isdir(GAME_DATA):
+        ba2.extract(GAME_DATA, [rel], os.path.join(root, "vanilla"))
+    if not os.path.exists(path):
+        return []
+    lib = B.collection("DressingLibrary")
+    lib.hide_render = True
+    lib.hide_viewport = True
+    before = set(bpy.data.objects)
+    with _ctx():
+        bpy.ops.import_scene.pynifly(filepath=path)
+    new = [o for o in bpy.data.objects if o not in before]
+    bpy.context.view_layer.update()
+    parts = []
+    for o in new:
+        for c in list(o.users_collection):
+            c.objects.unlink(o)
+        lib.objects.link(o)
+        if (o.type == "MESH" and o.data.materials and not o.name.startswith("bhk") and o.data.polygons
+                and "EditorMarker" not in o.name):
+            parts.append((o, o.matrix_world.copy()))
+    _preview_textures(root, parts)
+    _ONE[rel] = parts
+    return parts
+
+
+def _preview_textures(root, parts):
+    for o, _ in parts:
+        for m in o.data.materials:
+            d = str(m.get("BSShaderTextureSet_Diffuse", "")).replace("\\", "/").lower()
+            if not (d.startswith("textures/") and m.node_tree and "Diffuse_Texture" in m.node_tree.nodes):
+                continue
+            path = os.path.join(root, "vanilla", *d.split("/"))
+            if not os.path.exists(path) and os.path.isdir(GAME_DATA):
+                ba2.extract(GAME_DATA, [d], os.path.join(root, "vanilla"))
+            if os.path.exists(path):
+                m.node_tree.nodes["Diffuse_Texture"].image = bpy.data.images.load(path, check_existing=True)
+
+
 def place(lib, key, coll, name, x, y, z, deg=0.0, scale=1.0):
     """a copy of a library prop, its meshes sharing the library's data"""
     obs = []

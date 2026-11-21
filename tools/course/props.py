@@ -319,6 +319,43 @@ def stripes_box(m, sx, sy, sz, matrix):
 # ---------------------------------------------------------------- the set pieces
 
 
+_VANILLA = {}
+
+
+def vanilla(H, name, rel, at, height=None, width=None, lie=False, deg=0.0):
+    """one of the game's own meshes in the hole, scaled to a height (or a width across) - its shapes keep the
+    game's materials; visual only (no collision of its own). lie: turned onto its side (a tyre lying flat)."""
+    import dressing
+    parts = dressing.library_one(B._root, rel)
+    if not parts:
+        return []
+    rot = RX(90.0) if lie else Matrix.Identity(4)
+    xs, ys, zs = [], [], []
+    for ob, m in parts:
+        for c in ob.bound_box:
+            q = rot @ m @ Vector(c)
+            xs.append(q.x)
+            ys.append(q.y)
+            zs.append(q.z)
+    if height:
+        s = height / max(max(zs) - min(zs), 1e-3)
+    else:
+        s = width / max(max(xs) - min(xs), max(ys) - min(ys), 1e-3)
+    cx, cy = (max(xs) + min(xs)) / 2, (max(ys) + min(ys)) / 2
+    place = T(*at) @ RZ(deg) @ S(s) @ T(-cx, -cy, -min(zs)) @ rot  # centred on at, standing on its z
+    out = []
+    for i, (src, m) in enumerate(parts):
+        ob = bpy.data.objects.new(H.tag(f"{name}_{i}"), src.data)
+        H.coll.objects.link(ob)
+        ob.matrix_basis = place @ m
+        ob["mg_role"] = "visual"
+        ob["mg_hole"] = H.n
+        ob["mg_nocol"] = 1
+        ob["mg_vanilla"] = 1
+        out.append(ob)
+    return out
+
+
 def windmill(H, z, floor):
     """Hole 2: a Dutch smock mill: brick base with an arched tunnel through it, a tapering eight-sided clapboard tower,
     a boat-shaped cap, a gallery round its waist. In the hole's straight frame: the mill's front face at x=0 (the sails
@@ -335,7 +372,7 @@ def windmill(H, z, floor):
     # under the tunnel's floor (the lane is up on its rise): brick down to the ground
     if z - floor > 2:
         for x in (0.3, 49.7):
-            m.add("Brick", box(1.0, tunnel_w, z - floor), T(x, 0, floor + (z - floor) / 2))
+            m.add("Brick", box(1.0, tunnel_w, z - floor - 1.0), T(x, 0, floor + (z - floor - 1.0) / 2))
     # over the tunnel: brick, with an arch cut in its underside (a half lathe as the arch's soffit)
     m.add("Brick", box(50, tunnel_w + 2, base_h - tunnel_h - 2), T(25, 0, z + tunnel_h + 2 + (base_h - tunnel_h - 2) / 2))
     arch = lathe([(tunnel_w / 2, -25.0), (tunnel_w / 2, 25.0)], 12, 0, 180)
@@ -800,16 +837,16 @@ def sign(hole, coll, x, y, z, facing):
     m = Model(f"Hole{hole:02d}_SignPost", coll, hole)
     rot = RZ(math.degrees(facing) - 90.0)
     base = T(x, y, z) @ rot
-    m.add("DarkMetal", lathe([(2.4, 0.0), (2.4, 1.0), (1.4, 2.0), (1.0, 3.0), (0.8, 40.0), (1.2, 41.0), (0.8, 42.0)], 10), base @ T(0, -3.0, 0))
-    m.add("DarkMetal", sphere(1.3, 8, 6), base @ T(0, -3.0, 43.0))
-    m.add("DarkMetal", box(20.0, 0.8, 1.0, 0.2), base @ T(0, -1.5, 36.0))
-    # the board: 22 x 22 with an arched top, framed
+    # a cast iron post under the board (not across its face), a collar where it meets it
+    m.add("DarkMetal", lathe([(2.4, 0.0), (2.4, 1.0), (1.4, 2.0), (1.0, 3.0), (0.8, 12.0), (1.6, 12.6), (1.6, 13.4)], 10), base)
+    # the board: 22 x 22 with an arched top, framed, a finial on the arch
     s = 22.0
     arch = [(-s / 2, 0.0), (s / 2, 0.0)] + [(s / 2 * math.cos(a), s + 3.0 * math.sin(a)) for a in [math.pi * k / 10 for k in range(11)]]
     board = prism([(px, pz) for px, pz in arch], -0.9, 0.9, 0.25)
     m.add("DarkWood", board, base @ T(0, 0, 13.0) @ RX(90))
     frame = [(p[0], p[1]) for p in arch] + [arch[0]]
     m.add("Chrome", sweep([(px, 0.0, pz) for px, pz in frame], [(-1.1, -1.1), (1.1, -1.1), (1.1, 1.1), (-1.1, 1.1), (-1.1, -1.1)], up=(0, 1, 0)), base @ T(0, 0, 13.0))
+    m.add("DarkMetal", sphere(1.3, 8, 6), base @ T(0, 0, 13.0 + s + 4.3))
     for o in m.build():
         o["mg_nocol"] = 1
     # the face itself: the atlas tile, both sides (UVs by hand)
@@ -821,7 +858,7 @@ def sign(hole, coll, x, y, z, facing):
     for side in (1, -1):
         vs = []
         for cx, cz in ((-w / 2, 0), (w / 2, 0), (w / 2, w), (-w / 2, w)):
-            vs.append(bm.verts.new((cx * side, -side * 1.0, cz)))
+            vs.append(bm.verts.new((cx * side, -side * 1.35, cz)))  # (well clear of the board: no flicker)
         f = bm.faces.new(vs)
         for loop, (cu, cv) in zip(f.loops, ((0, 0), (1, 0), (1, 1), (0, 1))):
             loop[uv].uv = (u0 + cu / 6.0, v0 + cv / 3.0)
@@ -835,7 +872,7 @@ def tee_mat(H, x, y, z, a):
     mm = T(x, y, z) @ RZ(math.degrees(a))
     m.add("Rubber", box(16.0, 13.0, 0.5, 0.2), mm @ T(0, 0, 0.1))
     for dy in (-3.0, 3.0):
-        m.add("WhiteMetal", cyl(0.9, 0.12, 12), mm @ T(0, dy, 0.35))
+        m.add("WhiteMetal", cyl(0.9, 0.15, 16), mm @ T(0, dy, 0.42))  # (clear of the mat's top at 0.35: no flicker)
     return m.build()
 
 

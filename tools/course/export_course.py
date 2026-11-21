@@ -205,6 +205,9 @@ def _joined(name, coll, mat_name, parts):
         part.free()
         bm.from_mesh(me)
         bpy.data.meshes.remove(me)
+    # (the game's own props come with vertex groups - their segments - that mean nothing once merged)
+    for layer in list(bm.verts.layers.deform.values()):
+        bm.verts.layers.deform.remove(layer)
     me = bpy.data.meshes.new(name)
     bm.to_mesh(me)
     bm.free()
@@ -343,13 +346,21 @@ def make_ball_and_putter():
         bmesh.ops.translate(bm, vec=(-2.5, -1.1 - 56 * math.sin(math.radians(18)), 2.4 + 56 * math.cos(math.radians(18))), verts=grip)
         B.finish(bm, "Corrugated")
         B.new_object("Putter", bm, coll, "Corrugated", mg_role="kit", mg_hidden=1)
+    if "Dot" in bpy.data.objects and not bpy.data.objects["Dot"].get("mg_line"):
+        bpy.data.objects.remove(bpy.data.objects["Dot"])  # (the old guide dot: now a piece of line)
     if "Dot" not in bpy.data.objects:
-        # a guide dot: a flat disc lying on the green (the aiming line is a row of them)
+        # a piece of the guide line: a green strip lying on the green, 3 long along +y from the origin (a hair longer,
+        # so the pieces overlap and read as one line), 0.7 wide, glowing a little so it shows in shade
         bm = bmesh.new()
-        bmesh.ops.create_circle(bm, cap_ends=True, segments=10, radius=0.7)
-        bmesh.ops.translate(bm, vec=(0, 0, 0.15), verts=bm.verts)
-        B.finish(bm, "WhiteWood")
-        B.new_object("Dot", bm, coll, "WhiteWood", mg_role="kit", mg_hidden=1)
+        bmesh.ops.create_cube(bm, size=1.0)
+        bmesh.ops.scale(bm, vec=(0.7, 3.3, 0.1), verts=bm.verts)
+        bmesh.ops.translate(bm, vec=(0, 1.5, 0.2), verts=bm.verts)
+        B.finish(bm, "Guide")
+        ob = B.new_object("Dot", bm, coll, "Guide", mg_role="kit", mg_hidden=1, mg_line=1)
+        bsdf = B.material("Guide").node_tree.nodes.get("Principled BSDF")
+        if bsdf:
+            bsdf.inputs["Emission Color"].default_value = (0.25, 1.0, 0.35, 1.0)
+            bsdf.inputs["Emission Strength"].default_value = 0.6
     return bpy.data.objects["Ball"], bpy.data.objects["Putter"]
 
 

@@ -161,9 +161,8 @@ namespace mg
 		golf::Vec2                 _aimDir{ 1.0, 0.0 };
 		float                      _shotSoundGap{ 0.0f };
 
-		// the objects we place: the ball, the putter, the guide's dots
+		// the objects we place: the ball, the guide line's pieces
 		RE::ObjectRefHandle              _ball;
-		RE::ObjectRefHandle              _putter;
 		std::vector<RE::ObjectRefHandle> _dots;
 		bool                             _saving{ false };
 

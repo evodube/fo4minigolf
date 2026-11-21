@@ -466,6 +466,8 @@ def main():
         "Neon": lambda: solid(out, "Neon", (255, 120, 170), 0.5, 0.8),
         "Lamp": lambda: solid(out, "Lamp", (255, 190, 80), 0.5, 0.8),
         "Flame": lambda: solid(out, "Flame", (150, 200, 255), 0.2, 0.5),
+        "Guide": lambda: solid(out, "Guide", (60, 235, 90), 0.1, 0.3),
+        "Toxic": lambda: water(out, "Toxic", (24, 60, 20), (110, 190, 40)),
     }
     for k, job in jobs.items():
         if only is None or k in only:

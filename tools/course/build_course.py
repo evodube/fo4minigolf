@@ -62,7 +62,7 @@ MATERIALS = {
     "BlueMetal": ("Architecture/Warehouse/WrhsMetalCorgYellow01", 96.0, None),
     "Striped": ("interiors/Industrial/MetalSiloPlatesStriped01", 96.0, None),
     "GlowRock": ("Landscape/Rocks/GlowingSeaCliffs", 160.0, None),
-    "Muck": ("Landscape/GSMuckPools/GlowingSeaMuckWater02", 128.0, None),
+    "Muck": ("fo4minigolf/Toxic", 96.0, None),  # our own: the game's muck only looks like water with its water shader
     "Lawn": ("Landscape/Ground/DriedGrass01", 256.0, None),
     "Paving": ("Landscape/Roads/Cobblestone01Landscape", 96.0, None),
     "Signs": ("fo4minigolf/Signs", 0.0, None),     # UVs set by hand
@@ -89,6 +89,7 @@ MATERIALS = {
     "Neon": ("fo4minigolf/Neon", 64.0, None),
     "Lamp": ("fo4minigolf/Lamp", 64.0, None),
     "Flame": ("fo4minigolf/Flame", 64.0, None),
+    "Guide": ("fo4minigolf/Guide", 16.0, None),   # the aiming line
 }
 
 THEME = {  # rails, the cap along the rails' tops
@@ -424,8 +425,8 @@ def cup(hole, coll, x, y, z):
     new_object(f"Hole{hole:02d}_CupBottom", bm, coll, "WhiteWood", mg_role="visual", mg_hole=hole)
     # the lip: a ring from the hole's edge out half a unit, a hair above the turf
     bm = bmesh.new()
-    inner = [bm.verts.new((x + CUP_R * math.cos(a), y + CUP_R * math.sin(a), z + 0.04)) for a in [math.tau * k / seg for k in range(seg)]]
-    outer = [bm.verts.new((x + (CUP_R + 0.5) * math.cos(a), y + (CUP_R + 0.5) * math.sin(a), z + 0.04)) for a in [math.tau * k / seg for k in range(seg)]]
+    inner = [bm.verts.new((x + CUP_R * math.cos(a), y + CUP_R * math.sin(a), z + 0.1)) for a in [math.tau * k / seg for k in range(seg)]]
+    outer = [bm.verts.new((x + (CUP_R + 0.5) * math.cos(a), y + (CUP_R + 0.5) * math.sin(a), z + 0.1)) for a in [math.tau * k / seg for k in range(seg)]]
     for k in range(seg):
         bm.faces.new((inner[k], outer[k], outer[(k + 1) % seg], inner[(k + 1) % seg]))
     finish(bm, "WhiteWood")
@@ -583,12 +584,17 @@ def outline(pieces, step=2.0):
     """the outline (ccw) of a union of pieces: (Path, half width) or ("circle", x, y, r)"""
 
     def sdf(x, y):
+        # a smooth union (k = the fillet's size): where a round green meets a lane the corner is rounded off, as a
+        # real course's are, instead of a sharp notch the rails can't follow without spiking
+        k = 12.0
         d = 1e18
         for pc in pieces:
-            if pc[0] == "circle":
-                d = min(d, math.hypot(x - pc[1], y - pc[2]) - pc[3])
-            else:
-                d = min(d, pc[0].sdf(x, y, pc[1]))
+            e = math.hypot(x - pc[1], y - pc[2]) - pc[3] if pc[0] == "circle" else pc[0].sdf(x, y, pc[1])
+            if d >= 1e17:
+                d = e
+                continue
+            h = max(k - abs(d - e), 0.0) / k
+            d = min(d, e) - h * h * k * 0.25
         return d
 
     xs, ys = [], []
@@ -696,7 +702,7 @@ class Section:
         for ob in set(bpy.data.objects) - self.before:
             if ob.parent is not None:
                 continue  # moves with its parent
-            if ob.type == "MESH" and ob.get("mg_role") != "obstacle":
+            if ob.type == "MESH" and ob.get("mg_role") != "obstacle" and not ob.get("mg_vanilla"):
                 ob.data.transform(m)
                 ob.data.update()
             else:
@@ -852,15 +858,47 @@ class Hole:
         empty(self.tag("Tee"), self.coll, (x, y, z), self.n, mg_tee=1, mg_par=self.par, mg_name=self.name, mg_aim=ta)
         cx, cy = self.cup
         cz = self.z0 + self.h(cx, cy)
-        cutter = cup(self.n, self.coll, cx, cy, cz)
-        # the hole through the greens (not the water): a boolean cut, applied when the course is exported
+        # level ground round the cup, as a real one has (on a slope the carpet would cut across the cup's white
+        # rim): flat out to 9 (the whole grid cell round the cup, so the cut's edge is exactly level), easing back
+        # into the green's own slope by 18
         for ob in list(self.coll.objects):
-            if ob.type == "MESH" and ob.get("mg_role") == "ground" and ob.get("mg_surface", "green") == "green":
+            if ob.type == "MESH" and ob.get("mg_role") == "ground" and ob.get("mg_surface", "green") in ("green", "sand"):
+                for v in ob.data.vertices:
+                    d = math.hypot(v.co.x - cx, v.co.y - cy)
+                    if d < 18.0:
+                        k = smoothstep(9.0, 18.0, d)
+                        v.co.z = cz * (1.0 - k) + v.co.z * k if ob.get("mg_surface") == "green" else min(v.co.z, cz - 0.3)
+                ob.data.update()
+        for poly, spec in getattr(self, "sand", []):
+            near = min(math.hypot(x - cx, y - cy) for x, y in poly)
+            assert near > CUP_R + 7.0, f"hole {self.n}: a bunker {near:.1f} from the cup"
+        cutter = cup(self.n, self.coll, cx, cy, cz)
+        # the hole through the greens and any sand (not the water): a boolean cut, applied when the course is exported
+        for ob in list(self.coll.objects):
+            if ob.type == "MESH" and ob.get("mg_role") == "ground" and ob.get("mg_surface", "green") in ("green", "sand"):
                 mod = ob.modifiers.new("Cup", "BOOLEAN")
                 mod.operation = "DIFFERENCE"
                 mod.object = cutter
                 mod.solver = "EXACT"
                 mod.use_hole_tolerant = True
+        # the cuts (cup, bunkers, pools) baked in now, and the walls the cutters leave behind taken out again: a
+        # boolean through an open surface keeps the cutter's sides, carpet-textured walls down into every hole
+        dg = bpy.context.evaluated_depsgraph_get()
+        for ob in list(self.coll.objects):
+            if ob.type != "MESH" or ob.get("mg_role") != "ground" or not ob.modifiers:
+                continue
+            me = bpy.data.meshes.new_from_object(ob.evaluated_get(dg))
+            bm = bmesh.new()
+            bm.from_mesh(me)
+            bpy.data.meshes.remove(me)
+            bm.normal_update()
+            walls = [f for f in bm.faces if abs(f.normal.z) < 0.3]
+            bmesh.ops.delete(bm, geom=walls, context="FACES")
+            loose = [v for v in bm.verts if not v.link_faces]
+            bmesh.ops.delete(bm, geom=loose, context="VERTS")
+            bm.to_mesh(ob.data)
+            bm.free()
+            ob.modifiers.clear()
         # the sign beside the tee, outside the rail, facing out to the side
         s = self.sign_side
         sx, sy = self.p(10.0, s * (self.half + RAIL_T + 12.0))
@@ -909,7 +947,9 @@ def hole01(H):  # Welcome Mat: a dogleg left over a grassy mound, tyre stacks ei
     import props as P
     for i, (s, d) in enumerate(((40, 34), (100, -36))):
         with H.section(s, d):
-            P.tire_stack(H, i, DECK, 3)
+            for k in range(3):
+                P.vanilla(H, f"Tire{i}_{k}", "meshes/setdressing/tires/tire01.nif", (0, 0, DECK + k * 5.2), width=17.0,
+                          deg=37.0 * k)
     H.cup = H.p(L)
 
 
@@ -950,7 +990,8 @@ def hole03(H):  # Nuka Alley: a banked S-bend climbing between giant Nuka-Cola b
     for i, (s, d) in enumerate(((70, -10), (98, 14), (125, -14), (148, 6), (172, -8), (196, 14))):
         z = H.z(s, d)
         with H.section(s, d):
-            P.nuka_bottle(H, i, z - 0.5)
+            P.vanilla(H, f"Bottle{i}", "meshes/props/nukacolabottlefullprewar.nif", (0, 0, z - 0.3), height=34.0,
+                      deg=40.0 * i)
             ring_walls(H.tag(f"BottleWall{i}"), H.coll, (0, 0), 4.7, z - 2, 30.0, H.n, 0.55, segments=12)
     H.cup = H.p(L)
 
@@ -960,8 +1001,6 @@ def hole04(H):  # Rust Ramp: a steep ramp up onto a scrap-metal plateau, a hard 
     L = H.path.length
     H.bunkers([(L + 4, -18, 8, 5, 70)])
     H.lane(H.banked(lambda s, d: 32.0 * smoothstep(45.0, 115.0, s), 10.0))
-    with H.section(L):
-        box(H.tag("BackWall"), H.coll, (38, 0, H.z(L) + 20), (6, 60, 30), "Corrugated", "visual", H.n)["mg_nocol"] = 0
     H.cup = H.p(L, 8)
     H.sign_side = -1
 
@@ -1009,7 +1048,7 @@ def hole07(H):  # Diner Dogleg: uphill into a banked 90 degree corner round the 
     H.shape([("L", 110), ("A", 55, 90), ("L", 100)], 22, circles=[(110 + 55 * math.pi / 2 + 100, 0, 30)])
     L = H.path.length
     H.lane(H.banked(lambda s, d: 12.0 * smoothstep(20.0, 100.0, s) - 7.0 * smoothstep(175.0, 235.0, s), 20.0))
-    with H.section(150, -92):
+    with H.section(150, -80):
         P.diner(H, DECK)
         P.collision_box(H.tag("DinerBlock"), H.coll, H.n, (-20, 10, DECK + 18), (90, 40, 36))
     H.cup = H.p(L)
@@ -1054,12 +1093,11 @@ def hole10(H):  # Tire Yard: a ramp up to a clover of three round greens full of
     import props as P
     H.shape([("L", 180)], 20, circles=[(110, 26, 40), (150, -28, 40), (190, 10, 40)])
     H.lane(H.along(lambda s, d: 16.0 * smoothstep(15.0, 65.0, s)))
-    m = P.Model(H.tag("Tires"), H.coll, H.n)
     for i, (s, d) in enumerate(((95, 20), (130, -20), (160, 30), (175, -32), (195, -6))):
         x, y = H.p(s, d)
-        P.tire(m, x, y, H.z0 + 16.0 + 3.0, 9.0, 6.0)
+        P.vanilla(H, f"Tire{i}", "meshes/setdressing/tires/tire01.nif", (x, y, H.z0 + 16.0 - 0.2), width=19.0,
+                  deg=53.0 * i)
         ring_walls(H.tag(f"TireWall{i}"), H.coll, (x, y), 9.0, H.z0 + 14.0, 8.0, H.n, 0.85, segments=14)
-    m.build()
     H.cup = H.p(210, 30)
 
 
@@ -1102,7 +1140,8 @@ def hole13(H):  # Fat Man Jump: up the kicker ramp and over the muck to the isla
     # the lane: round at the tee, cut square at the ramp's lip, no rail across the lip
     start = [(18 * math.cos(a), 18 * math.sin(a)) for a in [math.pi / 2 + math.pi * k / 12 for k in range(13)]]
     H.poly = ccw([(175, -18), (175, 18)] + start)
-    H.h = H.along(lambda s, d: 18.0 * smoothstep(115.0, 170.0, s))
+    ramp = H.along(lambda s, d: 18.0 * smoothstep(115.0, 170.0, s))
+    H.h = lambda x, y: ramp(x, y) if x <= 176.0 else 0.0  # (past the lip: the island, flat)
     ground(H.tag("Green"), H.poly, H.h, H.z0, H.coll, "Turf", "green", H.n)
     open_rail = [(175, 18)] + start + [(175, -18)]
     rail(H.tag("GreenRail"), open_rail, H.h, H.z0, DECK, H.coll, H.rails, H.n, closed=False, cap=H.trim)
@@ -1113,6 +1152,9 @@ def hole13(H):  # Fat Man Jump: up the kicker ramp and over the muck to the isla
     arc = [(cx + r * math.cos(a), r * math.sin(a)) for a in [math.radians(-145 + 290 * k / 30) for k in range(31)]]
     rail(H.tag("IslandRail"), arc, flat, H.z0, DECK, H.coll, H.rails, H.n, closed=False, cap=H.trim)
     ground(H.tag("Muck"), [(165, -44), (cx - 10, -44), (cx - 10, 44), (165, 44)], flat, H.z0 - 3.0, H.coll, "Muck", "water", H.n)
+    # the lip's face: closed, the rail's material, from the ground up to the ramp's top
+    top = H.z0 + 18.0
+    box(H.tag("LipFace"), H.coll, (175.0 + RAIL_T / 2, 0.0, (DECK + top) / 2), (RAIL_T, 36.0 + 2 * RAIL_T, top - DECK), H.rails, "visual", H.n)
     with H.section(60, 42):
         P.fat_man(H, DECK)
     H.cup = (cx + 6.0, 0.0)
@@ -1157,11 +1199,11 @@ def hole16(H):  # Mr. Handy: a curving barbell, his three arms sweeping the big 
     L = H.path.length
     mid = 140.0
     H.poly = outline([(H.path, 18), ("circle", *H.p(mid), 62), ("circle", *H.p(L), 28)])
-    H.bunkers([(L + 2, 14, 7, 5, 90)])
+    H.bunkers([(L + 12, -15, 6, 4, 45)])
     H.lane(H.banked(lambda s, d: 6.0 * smoothstep(mid + 40, L - 10, s), 0.0))
     z = H.z(mid)
     with H.section(mid):
-        P.mr_handy(H, z)
+        P.vanilla(H, "HandyStatue", "meshes/architecture/generalatomics/genatomicsgianthandy01.nif", (0, 0, z), height=42.0)
         ring_walls(H.tag("HandyBodyWall"), H.coll, (0, 0), 9.0, z - 1, 10.0, H.n, 0.5, segments=12)
         P.collision_cyl(H.tag("HandyBlock"), H.coll, H.n, (0, 0, z), 12.0, 30.0)
         arms = blades(H.tag("HandyArms"), H.coll, 3, (16.0, 1.0, 1.0), (19.0, 0, 0), "Z", "Chrome", H.n)
@@ -1370,7 +1412,7 @@ def build(root, placements=None):
         for ob in H.coll.objects:
             if ob.parent is not None:
                 continue
-            if ob.type == "MESH" and ob.get("mg_role") != "obstacle":
+            if ob.type == "MESH" and ob.get("mg_role") != "obstacle" and not ob.get("mg_vanilla"):
                 ob.data.transform(m)  # bake: meshes keep identity transforms
                 ob.data.update()
             else:
@@ -1380,7 +1422,15 @@ def build(root, placements=None):
         ends[num] = (tuple((m @ Vector((H.tee[0], H.tee[1], 0))).xy), tuple((m @ Vector((H.cup[0], H.cup[1], 0))).xy))
 
     ground_coll = collection("Grounds", top)
-    hull = convex_hull([p for pad in pads for p in pad])
+    bpy.context.view_layer.update()
+    around = [p for pad in pads for p in pad]
+    for H in built.values():  # (the set pieces too: the diner, the castle's towers... all on the lawn)
+        for ob in H.coll.objects:
+            if ob.type == "MESH" and not ob.get("mg_hidden") and not ob.parent:
+                mw = ob.matrix_world
+                vs = ob.data.vertices
+                around += [tuple((mw @ vs[i].co).xy) for i in range(0, len(vs), max(1, len(vs) // 200))]
+    hull = convex_hull([(round(x, 1), round(y, 1)) for x, y in around])
     # the lawn: the hull pushed out 40 and rounded
     cx = sum(p[0] for p in hull) / len(hull)
     cy = sum(p[1] for p in hull) / len(hull)

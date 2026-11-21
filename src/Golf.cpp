@@ -23,7 +23,7 @@ namespace mg
 		constexpr float  kPenaltySeconds = 1.4f;
 		constexpr float  kHoledSeconds = 3.2f;
 		constexpr float  kDoneSeconds = 7.0f;
-		constexpr std::size_t kMaxDots = 20;
+		constexpr std::size_t kMaxDots = 40;      // the guide line's segments (Dot.nif: a 3-unit piece of green line)
 		constexpr double kTau = 6.283185307179586;
 
 		RE::FreeCameraState* FreeCamera()
@@ -916,35 +916,18 @@ namespace mg
 			Place(ball.get(), ballAt, Ni(m) * frame.rot, _phase == Phase::kPenalty);
 		}
 
-		// the putter: behind the ball while you aim (drawn back as you charge), else out of the way
-		const bool aiming = _phase == Phase::kAim && !_overhead;
+		// the guide: a green line along where a putt at the power you're holding goes (a short one before you start
+		// charging), laid on the ground in 3-unit pieces, each from one point of the path towards the next
+		const bool  aiming = _phase == Phase::kAim && !_overhead;
 		const float pull = _charging ? _power.load() : 0.0f;
-		{
-			const auto& b = _sim->Pos();
-			const double back = r + 0.6 + pull * 14.0;
-			const golf::Vec3 head{ b.x - _aimDir.x * back, b.y - _aimDir.y * back, b.z - r };
-			// its face looks along +y: y to the aim, z up
-			const M3 m{ { { _aimDir.y, _aimDir.x, 0.0 }, { -_aimDir.x, _aimDir.y, 0.0 }, { 0.0, 0.0, 1.0 } } };
-			const auto at = ToWorld(frame, head);
-			if (!_putter && aiming) {
-				_putter = Spawn(Forms::Putter(), at);
-			}
-			if (auto putter = _putter.get()) {
-				Place(putter.get(), at, Ni(m) * frame.rot, !aiming);
-			}
-		}
-
-		// the guide: where a putt at the power you're holding goes (a short line before you start charging)
 		std::vector<golf::Vec3> points;
 		if (aiming && s.guide && s.guideLength > 0.0f) {
 			const double power = _charging ? std::max(0.05, static_cast<double>(pull)) : 0.25;
 			const double speed = s.spec.maxSpeed * std::pow(power, s.powerCurve);
 			points = _sim->Predict(_aimDir, speed, s.guideLength, s.guideLength / static_cast<double>(kMaxDots));
-			if (!points.empty()) {
-				points.erase(points.begin());  // (not on the ball itself)
-			}
 		}
-		while (_dots.size() < std::min(points.size(), kMaxDots)) {
+		const std::size_t pieces = points.size() > 1 ? std::min(points.size() - 1, kMaxDots) : 0;
+		while (_dots.size() < pieces) {
 			_dots.push_back(Spawn(Forms::Dot(), ballAt));
 		}
 		for (std::size_t i = 0; i < _dots.size(); ++i) {
@@ -952,10 +935,26 @@ namespace mg
 			if (!dot) {
 				continue;
 			}
-			if (i < points.size()) {
-				golf::Vec3 p = points[i];
-				p.z -= r;  // on the ground
-				Place(dot.get(), ToWorld(frame, p), frame.rot, false);
+			if (i < pieces) {
+				golf::Vec3 a = points[i];
+				golf::Vec3 b = points[i + 1];
+				a.z -= r;  // on the ground
+				b.z -= r;
+				double dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
+				const double len = std::sqrt(dx * dx + dy * dy + dz * dz);
+				if (len < 1e-6) {
+					Place(dot.get(), ballAt, frame.rot, true);
+					continue;
+				}
+				dx /= len, dy /= len, dz /= len;
+				// the piece runs along its +y: y along the path, x across it (level), z up from the ground
+				double xx = dy, xy = -dx;
+				const double xl = std::sqrt(xx * xx + xy * xy);
+				xx = xl > 1e-6 ? xx / xl : 1.0;
+				xy = xl > 1e-6 ? xy / xl : 0.0;
+				const double zx = xy * dz, zy = -xx * dz, zz = xx * dy - xy * dx;  // x cross y
+				const M3 m{ { { xx, dx, zx }, { xy, dy, zy }, { 0.0, dz, zz } } };
+				Place(dot.get(), ToWorld(frame, a), Ni(m) * frame.rot, false);
 			} else {
 				Place(dot.get(), ballAt, frame.rot, true);
 			}
@@ -965,7 +964,6 @@ namespace mg
 	void Golf::RemoveObjects()
 	{
 		Remove(_ball);
-		Remove(_putter);
 		for (auto& h : _dots) {
 			Remove(h);
 		}
