@@ -75,6 +75,7 @@ namespace mg
 			bool             showCard{ false };  // the scorecard up (after a hole, at the end)
 			bool             finished{ false };  // the round's over: the final card
 			std::string      keys;               // the key hints
+			std::vector<std::array<float, 2>> guide;  // the aim line: screen points 0..1, from the ball's edge outwards
 		};
 		HudState Hud() const;
 
@@ -100,6 +101,7 @@ namespace mg
 		// main thread
 		void Tick();
 		void Scan();
+		void UpdateGuide();
 		void PlayNearest();
 		void StartRound(RE::TESObjectREFR* a_course);
 		void StartHole(int a_index);
@@ -204,6 +206,7 @@ namespace mg
 		bool                                  _haveLast{ false };
 
 		// the HUD
+		std::vector<std::array<float, 2>> _guide;
 		mutable std::mutex _hudMutex;
 		HudState           _hud;
 		std::string        _banner, _bannerSub;

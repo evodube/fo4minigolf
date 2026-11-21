@@ -46,7 +46,8 @@ namespace mg
 		powerCurve = std::clamp(ReadFloat(L"Putting", L"fPowerCurve", 1.5f), 1.0f, 3.0f);
 		maxStrokes = std::clamp(ReadInt(L"Putting", L"iMaxStrokes", 6), 2, 20);
 		guide = ReadInt(L"Putting", L"bGuide", 1) != 0;
-		guideLength = std::clamp(ReadFloat(L"Putting", L"fGuideLength", 120.0f), 0.0f, 1000.0f);
+		guideLength = std::clamp(ReadFloat(L"Putting", L"fGuideLength", 60.0f), 0.0f, 1000.0f);
+		guideFlipY = ReadInt(L"Putting", L"bGuideFlipY", 1) != 0;
 
 		camDistance = std::clamp(ReadFloat(L"Camera", L"fDistance", 85.0f), 20.0f, 400.0f);
 		camPitch = std::clamp(ReadFloat(L"Camera", L"fPitch", 28.0f), 0.0f, 89.0f);

@@ -29,8 +29,9 @@ namespace mg
 		bool  invertPull{ false };      // push the mouse forward for power instead
 		float powerCurve{ 1.5f };       // power -> speed: speed = max * power ^ this (finer control of soft putts)
 		int   maxStrokes{ 6 };          // a hole's over at this many (scored as this many)
-		bool  guide{ true };            // the dots showing where the putt goes
-		float guideLength{ 120.0f };    // ...how far ahead they show (game units)
+		bool  guide{ true };            // the green aim line from the ball (drawn on the HUD, as Bowling's)
+		float guideLength{ 60.0f };     // ...how far it reaches (game units: about 85 cm)
+		bool  guideFlipY{ true };       // (if the line shows up mirrored top to bottom, set 0)
 
 		// [Camera]
 		float camDistance{ 85.0f };   // behind the ball

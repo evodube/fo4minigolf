@@ -382,7 +382,7 @@ def make_ball_and_putter():
         B.finish(bm, "Guide")
         ob = B.new_object("Dot", bm, coll, "Guide", mg_role="kit", mg_hidden=1, mg_line=1)
         gm = B.material("Guide")
-        gm.pyn_shader.Shader_Flags_1 = "SPECULAR | CAST_SHADOWS | ZBUFFER_TEST | OWN_EMIT"
+        gm.pyn_shader.Shader_Flags_1 = "SPECULAR | ZBUFFER_TEST | OWN_EMIT"
         for n in gm.node_tree.nodes:
             if "Emission Strength" in getattr(n, "inputs", {}):
                 n.inputs["Emission Strength"].default_value = 0.6

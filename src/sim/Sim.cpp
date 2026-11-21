@@ -457,7 +457,7 @@ namespace golf
 		_rot.Normalize();
 	}
 
-	std::vector<Vec3> Sim::Predict(Vec2 a_dir, double a_speed, double a_maxLength, double a_spacing) const
+	std::vector<Vec3> Sim::Predict(Vec2 a_dir, double a_speed, double a_maxLength, double a_spacing, bool a_stopAtTurn) const
 	{
 		Sim copy = *this;
 		copy.Strike(a_dir, a_speed);
@@ -467,7 +467,16 @@ namespace golf
 		double sinceDot = 0.0;
 		Vec3   last = copy._pos;
 		for (int i = 0; i < 1200 && copy.Moving(); ++i) {  // 10 s at most
+			const Vec2 before = copy._vel.XY();
 			copy.Step(1.0 / 120.0);
+			if (a_stopAtTurn) {
+				const Vec2   now = copy._vel.XY();
+				const double slow = 20.0;  // (a turn this slow is the slope's doing; a bounce off a wall is fast)
+				if (before.Dot(now) < 0.0 && before.Length() < slow) {
+					points.push_back(copy._pos);
+					return points;
+				}
+			}
 			const double step = (copy._pos - last).Length();
 			last = copy._pos;
 			travelled += step;

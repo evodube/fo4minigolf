@@ -916,49 +916,11 @@ namespace mg
 			Place(ball.get(), ballAt, Ni(m) * frame.rot, _phase == Phase::kPenalty);
 		}
 
-		// the guide: a green line along where a putt at the power you're holding goes (a short one before you start
-		// charging), laid on the ground in 3-unit pieces, each from one point of the path towards the next
-		const bool  aiming = _phase == Phase::kAim && !_overhead;
-		const float pull = _charging ? _power.load() : 0.0f;
-		std::vector<golf::Vec3> points;
-		if (aiming && s.guide && s.guideLength > 0.0f) {
-			const double power = _charging ? std::max(0.05, static_cast<double>(pull)) : 0.25;
-			const double speed = s.spec.maxSpeed * std::pow(power, s.powerCurve);
-			points = _sim->Predict(_aimDir, speed, s.guideLength, s.guideLength / static_cast<double>(kMaxDots));
+		// (the aim line is drawn on the HUD, as Bowling's is: UpdateGuide)
+		for (auto& h : _dots) {
+			Remove(h);
 		}
-		const std::size_t pieces = points.size() > 1 ? std::min(points.size() - 1, kMaxDots) : 0;
-		while (_dots.size() < pieces) {
-			_dots.push_back(Spawn(Forms::Dot(), ballAt));
-		}
-		for (std::size_t i = 0; i < _dots.size(); ++i) {
-			auto dot = _dots[i].get();
-			if (!dot) {
-				continue;
-			}
-			if (i < pieces) {
-				golf::Vec3 a = points[i];
-				golf::Vec3 b = points[i + 1];
-				a.z -= r;  // on the ground
-				b.z -= r;
-				double dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
-				const double len = std::sqrt(dx * dx + dy * dy + dz * dz);
-				if (len < 1e-6) {
-					Place(dot.get(), ballAt, frame.rot, true);
-					continue;
-				}
-				dx /= len, dy /= len, dz /= len;
-				// the piece runs along its +y: y along the path, x across it (level), z up from the ground
-				double xx = dy, xy = -dx;
-				const double xl = std::sqrt(xx * xx + xy * xy);
-				xx = xl > 1e-6 ? xx / xl : 1.0;
-				xy = xl > 1e-6 ? xy / xl : 0.0;
-				const double zx = xy * dz, zy = -xx * dz, zz = xx * dy - xy * dx;  // x cross y
-				const M3 m{ { { xx, dx, zx }, { xy, dy, zy }, { 0.0, dz, zz } } };
-				Place(dot.get(), ToWorld(frame, a), Ni(m) * frame.rot, false);
-			} else {
-				Place(dot.get(), ballAt, frame.rot, true);
-			}
-		}
+		_dots.clear();
 	}
 
 	void Golf::RemoveObjects()
@@ -1273,11 +1235,54 @@ namespace mg
 			h.showCard = _showCard;
 			h.finished = _phase == Phase::kDone;
 			const auto& s = Settings::Get();
+			UpdateGuide();
+			h.guide = _guide;
 			h.keys = std::format("LEFT BUTTON: HOLD, PULL BACK, LET GO TO PUTT · RIGHT BUTTON / {}: VIEW FROM ABOVE · {}: END THE ROUND",
 				Settings::Key(s.keyOverhead), Settings::Key(s.keyLeave));
 		}
 		std::scoped_lock lock(_hudMutex);
 		_hud = std::move(h);
+	}
+
+	void Golf::UpdateGuide()
+	{
+		// the green line, as Bowling's: from the ball's edge straight along your aim, a fixed length, lying on the
+		// green (it follows the slopes), as screen points 0..1 for the HUD to draw. It ends at the green's edge.
+		// It shows the line you're starting the ball on, not where the slopes take it.
+		_guide.clear();
+		const auto& s = Settings::Get();
+		auto*       camera = RE::Main::WorldRootCamera();
+		auto        course = _courseRef.get();
+		Frame       frame;
+		if (!s.guide || !_playing || _phase != Phase::kAim || _overhead || !_sim || _sim->Moving() || !camera || !course ||
+			!FrameOf(course.get(), frame)) {
+			return;
+		}
+		const auto project = [&](const RE::NiPoint3& a_world, float& a_x, float& a_y) {
+			float z = 0.0f;
+			if (!camera->WorldPtToScreenPt3(a_world, a_x, a_y, z, 1e-5f) || z <= 0.0f) {
+				return false;
+			}
+			if (s.guideFlipY) {
+				a_y = 1.0f - a_y;
+			}
+			return true;
+		};
+		const double r = s.spec.ballRadius;
+		const auto&  b = _sim->Pos();
+		constexpr double kStep = 2.0;
+		for (double t = r + 1.0; t <= r + 1.0 + s.guideLength; t += kStep) {
+			const golf::Vec2 xy{ b.x + _aimDir.x * t, b.y + _aimDir.y * t };
+			double           z = 0.0;
+			const golf::Tri* tri = nullptr;
+			if (!_sim->Ground(xy, b.z + 2.0 * r + t * 0.6, z, tri) || (tri && tri->surface == golf::Surface::kWater)) {
+				break;  // (off the green, or into the water)
+			}
+			float sx = 0.0f, sy = 0.0f;
+			if (project(ToWorld(frame, { xy.x, xy.y, z + 0.3 }), sx, sy)) {
+				_guide.push_back({ sx, sy });
+			}
+		}
 	}
 
 	Golf::HudState Golf::Hud() const

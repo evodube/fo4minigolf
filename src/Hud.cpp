@@ -285,6 +285,25 @@ namespace mg::Hud
 			}
 		}
 
+		// the aim line, green, fading as it goes (Bowling's)
+		void Guide(ImGuiViewport* a_viewport, const View& a_v, const Golf::HudState& a_st)
+		{
+			if (a_st.guide.size() < 2) {
+				return;
+			}
+			const auto at = [&](const std::array<float, 2>& a_p) {
+				return ImVec2{ a_viewport->Pos.x + a_p[0] * a_viewport->Size.x, a_viewport->Pos.y + a_p[1] * a_viewport->Size.y };
+			};
+			const std::size_t n = a_st.guide.size();
+			for (std::size_t i = 1; i < n; ++i) {
+				const float  fade = 1.0f - static_cast<float>(i) / static_cast<float>(n);
+				const ImVec2 a = at(a_st.guide[i - 1]);
+				const ImVec2 b = at(a_st.guide[i]);
+				DL::AddLine(a_v.dl, a, b, Fade(kGlow, 0.45f * fade), 7.0f * a_v.s);  // (a soft glow under it)
+				DL::AddLine(a_v.dl, a, b, Fade(kBright, 0.95f * fade + 0.05f), 2.5f * a_v.s);
+			}
+		}
+
 		// bottom left: the keys
 		void Keys(const View& a_v, const Golf::HudState& a_st)
 		{
@@ -314,6 +333,7 @@ namespace mg::Hud
 			v.origin = viewport->Pos;
 			v.w = viewport->Size.x / v.s;
 			v.h = viewport->Size.y / v.s;
+			Guide(viewport, v, st);
 			HolePanel(v, st);
 			TotalPanel(v, st);
 			Card(v, st);

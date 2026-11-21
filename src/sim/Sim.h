@@ -106,7 +106,9 @@ namespace golf
 
 		// Where a shot would go, for the aiming guide: points every a_spacing units along the ball's path, for at
 		// most a_maxLength units (the obstacles keep moving, as they will).
-		std::vector<Vec3> Predict(Vec2 a_dir, double a_speed, double a_maxLength, double a_spacing) const;
+		// a_stopAtTurn: end where the ball comes to a halt on a slope and starts back the way it came (the aiming line
+		// shows only the way out, not the roll back down over itself); bounces off walls carry on
+		std::vector<Vec3> Predict(Vec2 a_dir, double a_speed, double a_maxLength, double a_spacing, bool a_stopAtTurn = false) const;
 
 	private:
 		void SubStep(double a_h, std::vector<Event>& a_events);
