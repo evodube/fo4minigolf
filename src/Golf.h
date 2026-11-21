@@ -100,6 +100,7 @@ namespace mg
 		// main thread
 		void Tick();
 		void Scan();
+		void PlayNearest();
 		void StartRound(RE::TESObjectREFR* a_course);
 		void StartHole(int a_index);
 		void EndRound(const char* a_why);
@@ -144,6 +145,7 @@ namespace mg
 		};
 		std::vector<Placed> _placed;
 		float               _scanTimer{ 0.0f };
+		bool                _toldHowToPlay{ false };  // the first time you're near a course: how to play, once
 
 		// ---- your round
 		std::atomic<bool>          _playing{ false };

@@ -196,40 +196,10 @@ def _root(coll, name, collision=None):
     return r
 
 
-def _cut_cups(bm, hole):
-    """cuts the cup's round hole out of a green"""
-    cup = bpy.data.objects.get(f"Hole{hole:02d}_Cup")
-    if cup is None:
-        return
-    c = cup.matrix_world.translation
-    r = B.CUP_R
-    doomed = [f for f in bm.faces if (f.calc_center_median().xy - c.xy).length < r + 0.5 and abs(f.calc_center_median().z - c.z) < 3]
-    bmesh.ops.delete(bm, geom=doomed, context="FACES")
-    # close the gap: a ring from the cut's edge to the cup's lip
-    edges = [e for e in bm.edges if e.is_boundary and all((v.co.xy - c.xy).length < r + 9 for v in e.verts)]
-    for e in edges:
-        a, b = e.verts
-        pa = c.xy + (a.co.xy - c.xy).normalized() * r
-        pb = c.xy + (b.co.xy - c.xy).normalized() * r
-        va = bm.verts.new((pa.x, pa.y, c.z))
-        vb = bm.verts.new((pb.x, pb.y, c.z))
-        try:
-            f = bm.faces.new((a, b, vb, va))
-        except ValueError:
-            continue
-    bmesh.ops.remove_doubles(bm, verts=bm.verts[:], dist=0.05)
-    bm.normal_update()
-    for f in bm.faces:
-        if f.normal.z < 0:
-            f.normal_flip()
-
-
 def _joined(name, coll, mat_name, parts):
     bm = bmesh.new()
     for ob in parts:
-        part = world_mesh(ob)
-        if ob.get("mg_role") == "ground" and ob.get("mg_surface", "green") != "water":
-            _cut_cups(part, int(ob.get("mg_hole", 0)))
+        part = world_mesh(ob)  # (with its modifiers: the greens' cup holes)
         me = bpy.data.meshes.new("tmp")
         part.to_mesh(me)
         part.free()
@@ -284,6 +254,7 @@ def export_course_nif(root_dir):
     col.rigid_body.collision_shape = "MESH"
     col["pynRigidBody"] = "bhkPhysicsSystem"
     col["pynCollisionShapeType"] = "compressed_mesh"
+    col["pynCollisionFlags"] = "SYNC_ON_UPDATE"  # 128, as vanilla statics' bhkNPCollisionObject
 
     # the moving obstacles: each its own node (its name the obstacle's, as course.txt has it), placed as at time 0,
     # its mesh under it; the plugin turns, slides or lifts the node (src/Golf.cpp)
@@ -310,7 +281,10 @@ def export_course_nif(root_dir):
     coll.objects.link(bsx)
     bsx.parent = root
     bsx["BSXFlags_Name"] = "BSX"
-    bsx["BSXFlags_Value"] = "HAVOK | COMPLEX"
+    # Havok on (PyNifly spells it HAVOC: an unknown name is dropped without a word, and without the bit the game
+    # ignores the collision: nothing to stand on, nothing to select in workshop mode), articulated as vanilla
+    # statics are (shacks' floors: 162, these two and their editor marker's)
+    bsx["BSXFlags_Value"] = "HAVOC | ARTICULATED"
     path = os.path.join(root_dir, "Data", "Meshes", "fo4minigolf", "Course.nif")
     _export([root, bsx, col] + shapes + nodes, root, path)
     return path, len(shapes), len(me.polygons)

@@ -7,7 +7,7 @@ Run inside Blender (Blender 5.2 + PyNifly), with this folder on sys.path:
     import export_course; export_course.export(root)       # writes the meshes and course.txt
 
 root is the working folder: <root>/vanilla holds the game's textures pulled out of its archives by ba2.py (for the
-viewport only), <root>/Data/Textures/fo4minigolf our own (signs and flags, tools/course/make_textures.py).
+viewport only), <root>/Data/Textures/fo4minigolf our own (the signs and the mini golf carpet, tools/course/make_textures.py).
 
 Every object carries custom properties that export_course.py reads:
     mg_hole      1..18 (0 = the deck, shared)
@@ -51,7 +51,7 @@ GRID = 8.0               # the greens' triangle size
 
 # name: (texture path without _d/_n/_s, units per texture repeat, normal/specular override)
 MATERIALS = {
-    "Turf": ("interiors/Institute/InstituteTurf01", 96.0, None),
+    "Turf": ("fo4minigolf/Turf", 80.0, None),  # our own: the game has no mini golf carpet (make_textures.py)
     "Lane": ("interiors/Building/BldWoodFloorBowling01", 128.0, None),
     "TeeMat": ("interiors/Building/BldCarpetDecoRed01", 48.0, "interiors/Building/BldCarpetDeco01"),
     "Deck": ("Architecture/Buildings/WoodFloor01", 192.0, None),
@@ -66,7 +66,6 @@ MATERIALS = {
     "Lawn": ("Landscape/Ground/DriedGrass01", 256.0, None),
     "Paving": ("Landscape/Roads/Cobblestone01Landscape", 96.0, None),
     "Signs": ("fo4minigolf/Signs", 0.0, None),     # UVs set by hand
-    "Flags": ("fo4minigolf/Flags", 0.0, None),
 }
 
 THEME = {  # rails, trim
@@ -353,37 +352,42 @@ def empty(name, coll, loc, hole, **props):
     return e
 
 
-def cup(hole, coll, x, y, z, rails_mat):
-    """the cup: a liner down into the green (the green's cut-out is made by export: see cut_cup), and a flag on a
-    short pole just behind it"""
-    cylinder(f"Hole{hole:02d}_CupLiner", coll, (x, y, z - 8.0), CUP_R, 8.0, "WhiteWood", segments=24, cap=False)
+def cup(hole, coll, x, y, z):
+    """the cup, as a real one: a round hole through the green (a boolean cut, Hole.finish puts it on the hole's greens),
+    a white plastic liner down into it (its inside facing you), its bottom, and a thin white lip flush with the turf"""
+    seg = 32
+    # the cutter: a tall cylinder the greens' boolean modifiers take away (physics only: no material, not exported)
     bm = bmesh.new()
-    bmesh.ops.create_circle(bm, cap_ends=True, segments=24, radius=CUP_R)
+    bmesh.ops.create_cone(bm, cap_ends=True, cap_tris=False, segments=seg, radius1=CUP_R, radius2=CUP_R, depth=40.0)
+    bmesh.ops.translate(bm, vec=(x, y, z), verts=bm.verts)
+    cutter = new_object(f"Hole{hole:02d}_CupCutter", bm, coll, None, mg_hole=hole, mg_hidden=1)
+    cutter.display_type = "WIRE"
+    cutter.hide_render = True
+    # the liner: open at the top, faces turned inwards (you look into it)
+    bm = bmesh.new()
+    bmesh.ops.create_cone(bm, cap_ends=False, segments=seg, radius1=CUP_R, radius2=CUP_R, depth=8.0)
+    bmesh.ops.translate(bm, vec=(x, y, z - 4.0), verts=bm.verts)
+    finish(bm, "WhiteWood")
+    bmesh.ops.reverse_faces(bm, faces=bm.faces[:])
+    new_object(f"Hole{hole:02d}_CupLiner", bm, coll, "WhiteWood", mg_role="visual", mg_hole=hole)
+    bm = bmesh.new()
+    bmesh.ops.create_circle(bm, cap_ends=True, segments=seg, radius=CUP_R)
     bmesh.ops.translate(bm, vec=(x, y, z - 7.9), verts=bm.verts)
     finish(bm, "WhiteWood")
     new_object(f"Hole{hole:02d}_CupBottom", bm, coll, "WhiteWood", mg_role="visual", mg_hole=hole)
-    empty(f"Hole{hole:02d}_Cup", coll, (x, y, z), hole, mg_cup=1)
-
-
-def flag(hole, coll, x, y, z):
-    cylinder(f"Hole{hole:02d}_FlagPole", coll, (x, y, z), 0.5, 46.0, "WhiteWood", segments=8)
-    # the flag: a two-sided card, its number from the atlas (6 x 3 cells)
-    i = hole - 1
-    u0, v0 = (i % 6) / 6.0, 1.0 - (i // 6 + 1) / 3.0
+    # the lip: a ring from the hole's edge out half a unit, a hair above the turf
     bm = bmesh.new()
-    uv = bm.loops.layers.uv.verify()
-    w, h = 16.0, 11.0
-    corners = [(0, 0), (w, 0), (w, h), (0, h)]
-    for side in (1, -1):
-        vs = [bm.verts.new((x + 0.5 + cx, y + 0.05 * side, z + 46.0 - h + cy)) for cx, cy in corners]
-        f = bm.faces.new(vs if side == 1 else list(reversed(vs)))
-        for loop in f.loops:
-            lx = (loop.vert.co.x - x - 0.5) / w
-            ly = (loop.vert.co.z - (z + 46.0 - h)) / h
-            if side == -1:
-                lx = lx  # same number both sides (mirrored on the back, like a real flag)
-            loop[uv].uv = (u0 + lx / 6.0, v0 + ly / 3.0)
-    new_object(f"Hole{hole:02d}_Flag", bm, coll, "Flags", mg_role="visual", mg_hole=hole)
+    inner = [bm.verts.new((x + CUP_R * math.cos(a), y + CUP_R * math.sin(a), z + 0.04)) for a in [math.tau * k / seg for k in range(seg)]]
+    outer = [bm.verts.new((x + (CUP_R + 0.5) * math.cos(a), y + (CUP_R + 0.5) * math.sin(a), z + 0.04)) for a in [math.tau * k / seg for k in range(seg)]]
+    for k in range(seg):
+        bm.faces.new((inner[k], outer[k], outer[(k + 1) % seg], inner[(k + 1) % seg]))
+    finish(bm, "WhiteWood")
+    for f in bm.faces:
+        if f.normal.z < 0:
+            f.normal_flip()
+    new_object(f"Hole{hole:02d}_CupLip", bm, coll, "WhiteWood", mg_role="visual", mg_hole=hole)
+    empty(f"Hole{hole:02d}_Cup", coll, (x, y, z), hole, mg_cup=1)
+    return cutter
 
 
 def sign(hole, coll, x, y, z, facing):
@@ -721,15 +725,15 @@ class Hole:
         empty(self.tag("Tee"), self.coll, (x, y, z), self.n, mg_tee=1, mg_par=self.par, mg_name=self.name, mg_aim=ta)
         cx, cy = self.cup
         cz = self.z0 + self.h(cx, cy)
-        cup(self.n, self.coll, cx, cy, cz, self.rails)
-        # the flag beside the cup, on the side away from the tee
-        dx, dy = cx - x, cy - y
-        l = math.hypot(dx, dy) or 1.0
-        fx, fy = cx + dx / l * 8.0 - dy / l * 5.0, cy + dy / l * 8.0 + dx / l * 5.0
-        if not inside((fx, fy), self.poly):
-            fx, fy = cx - dy / l * 8.0, cy + dx / l * 8.0
-        flag(self.n, self.coll, fx, fy, self.z0 + self.h(fx, fy))
-        ring_walls(self.tag("FlagWall"), self.coll, (fx, fy), 0.8, self.z0 + self.h(fx, fy) - 2, 40.0, self.n, 0.5, segments=6)
+        cutter = cup(self.n, self.coll, cx, cy, cz)
+        # the hole through the greens (not the water): a boolean cut, applied when the course is exported
+        for ob in list(self.coll.objects):
+            if ob.type == "MESH" and ob.get("mg_role") == "ground" and ob.get("mg_surface", "green") != "water":
+                mod = ob.modifiers.new("Cup", "BOOLEAN")
+                mod.operation = "DIFFERENCE"
+                mod.object = cutter
+                mod.solver = "EXACT"
+                mod.use_hole_tolerant = True
         # the sign beside the tee, outside the rail, facing out to the side
         s = self.sign_side
         sx, sy = self.p(10.0, s * (self.half + RAIL_T + 10.0))

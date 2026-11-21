@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Makes the mini golf course's own textures: the hole signs and the flags. The rest of the course uses the game's
+"""Makes the mini golf course's own textures: the hole signs and the mini golf carpet. The rest of the course uses the game's
 textures. (The other generators here, carpets, wood, metal and so on, are kept in case a texture the game doesn't
-have is ever wanted; main() doesn't call them.)
+have is ever wanted; main() doesn't call them, nor the flags', gone with the flags.)
 
     python tools/course/make_textures.py <out folder>
 
@@ -370,13 +370,35 @@ def flags(out, name):
     print("wrote", name)
 
 
+def turf(out, name):
+    """Mini golf carpet: bright green, a short dense nap of fine fibres (some lighter tips, some darker roots), the
+    tufting's faint rows, the nap lying a little differently here and there, a little sheen, no dirt.
+    (The game's own carpets are stained and dull, its turf grassy: none looks like a mini golf course's.)"""
+    rng = np.random.default_rng(42)
+    yy, xx = np.mgrid[0:S, 0:S]
+    grain = rng.random((S, S))
+    # fibres: short strands, smeared a pixel or two along their own (random) lie
+    strands = (noise(S, 0.6, aspect=(1.0, 0.45)) + noise(S, 0.6, aspect=(0.45, 1.0))) * 0.5
+    f = np.clip(grain * 0.45 + strands * 0.55, 0, 1)
+    tips = (rng.random((S, S)) > 0.955).astype(float)   # light fibre ends catching the light
+    roots = (rng.random((S, S)) > 0.94).astype(float)   # dark gaps between tufts
+    rows = 0.5 + 0.5 * np.sin(yy / S * 2 * math.pi * 128 + noise(S, 30) * 2.0)
+    lay = fbm(S, 160, 3)
+    base = colour((44, 136, 56))
+    c = base[None, None, :] * (0.72 + 0.5 * f[..., None]) * (0.92 + 0.14 * lay[..., None]) * (0.96 + 0.06 * rows[..., None])
+    c = mix(c, colour((120, 205, 110))[None, None, :], tips * 0.6)
+    c = mix(c, colour((18, 60, 24))[None, None, :], roots * 0.55)
+    height = f * 0.8 + rows * 0.15 + tips * 0.4 - roots * 0.5
+    write_set(out, name, c, height, 3.0, 0.07 + 0.05 * lay, 0.2)
+
+
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "..", "..", "dist", "Data", "Textures", "fo4minigolf")
     os.makedirs(out, exist_ok=True)
     # Everything else on the course uses the game's own textures (see build_course.py MATERIALS): only the signs
     # and the flags need text of their own.
     signs(out, "Signs")
-    flags(out, "Flags")
+    turf(out, "Turf")
 
 
 if __name__ == "__main__":

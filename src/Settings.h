@@ -20,6 +20,7 @@ namespace mg
 		static std::string Key(int a_vk);
 
 		// [Keys] virtual-key codes
+		int keyPlay{ 0x67 };      // Numpad 7: start a round on the nearest course (besides activating it)
 		int keyLeave{ 0x58 };     // X: end the round
 		int keyOverhead{ 0x51 };  // Q: the view from above the hole (the right mouse button does it too)
 

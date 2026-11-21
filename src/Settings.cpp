@@ -37,6 +37,7 @@ namespace mg
 
 	void Settings::Load()
 	{
+		keyPlay = ReadInt(L"Keys", L"iPlay", 0x67);
 		keyLeave = ReadInt(L"Keys", L"iLeave", 0x58);
 		keyOverhead = ReadInt(L"Keys", L"iOverhead", 0x51);
 

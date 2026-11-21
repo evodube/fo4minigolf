@@ -211,7 +211,23 @@ namespace mg
 
 	void Golf::PollInput()
 	{
-		if (!_playing || !util::GameHasFocus() || menus::AnyBlocking()) {
+		if (!_playing) {
+			// not playing: only the play key (a round on the nearest course)
+			const int vk = Settings::Get().keyPlay;
+			const bool now = vk > 0 && vk < 256 && util::GameHasFocus() && !menus::AnyBlocking() && (::GetAsyncKeyState(vk) & 0x8000) != 0;
+			const bool was = vk > 0 && vk < 256 && _keysWas[vk];
+			if (vk > 0 && vk < 256) {
+				_keysWas[vk] = now;
+			}
+			if (now && !was) {
+				if (auto* tasks = F4SE::GetTaskInterface()) {
+					tasks->AddTask([this]() { PlayNearest(); });
+				}
+			}
+			_lmbWas = _rmbWas = false;
+			return;
+		}
+		if (!util::GameHasFocus() || menus::AnyBlocking()) {
 			_lmbWas = _rmbWas = false;
 			if (_charging) {
 				_charging = false;  // (a menu came up mid-charge: no putt)
@@ -326,10 +342,50 @@ namespace mg
 			}
 		}
 		_placed = std::move(next);
+		// the first time you're near a course: how to play it (once a session)
+		if (!_toldHowToPlay && !_playing) {
+			for (auto* ref : found) {
+				if ((ref->data.location - player->data.location).Length() < 1200.0f) {
+					_toldHowToPlay = true;
+					RE::SendHUDMessage::ShowHUDMessage(std::format("Mini Golf: activate the course, or press {}, to play a round",
+														   Settings::Key(Settings::Get().keyPlay))
+														   .c_str(),
+						nullptr, false, false);
+					break;
+				}
+			}
+		}
 		// the round's course gone (scrapped, unloaded): the round's over
 		if (_playing && !_courseRef.get()) {
 			EndRound("the course is gone");
 		}
+	}
+
+	void Golf::PlayNearest()
+	{
+		if (_playing || IsGamePaused()) {
+			return;
+		}
+		Scan();
+		auto*              player = RE::PlayerCharacter::GetSingleton();
+		RE::TESObjectREFR* best = nullptr;
+		float              bestD = 2500.0f;  // (the course is 16.5 m across: from anywhere on it, or just by it)
+		for (auto& p : _placed) {
+			auto ref = p.ref.get();
+			if (!ref || !player) {
+				continue;
+			}
+			const float d = (ref->data.location - player->data.location).Length();
+			if (d < bestD) {
+				bestD = d;
+				best = ref.get();
+			}
+		}
+		if (!best) {
+			RE::SendHUDMessage::ShowHUDMessage("Mini Golf: no course near you", nullptr, false, false);
+			return;
+		}
+		Activated(best);
 	}
 
 	void Golf::Activated(RE::TESObjectREFR* a_ref)
@@ -954,7 +1010,7 @@ namespace mg
 		}
 		const auto& s = Settings::Get();
 		const auto  code = static_cast<int>(a_event->idCode);
-		return code == s.keyLeave || code == s.keyOverhead;
+		return code == s.keyLeave || code == s.keyOverhead || code == s.keyPlay;
 	}
 
 	void Golf::EnterCamera()
