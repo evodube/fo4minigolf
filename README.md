@@ -34,19 +34,19 @@ game's textures where it has a fitting one, and our own for the carpet, signs, r
 |---|------|-----|-------|--------------|
 | 1 | Welcome Mat | 2 | dogleg left | a mound, tyre stacks |
 | 2 | Old Windmill | 3 | rise, then down and right | the windmill on a rise, its sails block the tunnel; a ramp down to the green, a bunker |
-| 3 | Nuka Alley | 2 | banked S-bend, climbing | giant Nuka-Cola bottles |
+| 3 | Nuka Alley | 3 | banked S-bend, climbing | giant Nuka-Cola bottles |
 | 4 | Rust Ramp | 3 | steep ramp, hard left | a scrap-metal plateau, a bunker |
-| 5 | Toxic Crossing | 3 | dumbbell | a hump between sand bunkers |
-| 6 | Vertibird | 4 | uphill, right bend, big round green | a rotor sweeping the green, a bunker |
+| 5 | Toxic Crossing | 2 | dumbbell | a hump between sand bunkers |
+| 6 | Vertibird | 3 | uphill, right bend, big round green | a rotor sweeping the green, a bunker |
 | 7 | Diner Dogleg | 2 | uphill into a banked 90 | the diner on the corner |
 | 8 | The Volcano | 3 | bend into a lollipop | the cup on top of a cone, lava rocks |
 | 9 | Vault Doors | 3 | long straight, step down, right | two sliding blast doors in Vault-Tec frames |
-| 10 | Tire Yard | 2 | ramp up to a clover | bouncy tyres |
+| 10 | Tire Yard | 3 | ramp up to a clover | bouncy tyres |
 | 11 | The Drop | 2 | steep covered chute, bend at the bottom | |
-| 12 | Wrecking Ball | 3 | banked hairpin | a crane and swinging wrecking ball |
+| 12 | Wrecking Ball | 2 | banked hairpin | a crane and swinging wrecking ball |
 | 13 | The Fork | 3 | a straight that splits round a planter | a hump on the left route, a bunker on the right |
 | 14 | Glowing Sea | 3 | wide wave | rolling ground, three sand bunkers |
-| 15 | Castle Gate | 3 | ramp up, through the gate, bend | the gatehouse and a rising portcullis |
+| 15 | Castle Gate | 2 | ramp up, through the gate, bend | the gatehouse and a rising portcullis |
 | 16 | Mr. Handy | 4 | curving barbell | his three arms sweeping the green, a bunker by the cup |
 | 17 | Zigzag | 3 | three switchbacks down a hillside | terraces with a ramp down round each bend |
 | 18 | Last Stop | 2 | banked sweep up into a funnel | a bunker at its mouth |
