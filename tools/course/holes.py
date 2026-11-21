@@ -14,7 +14,7 @@ HOLES = [
     (5, 2, "Toxic Crossing", "glow"),
     (6, 3, "Vertibird", "military"),
     (7, 2, "Diner Dogleg", "americana"),
-    (8, 2, "Barrel Bumpers", "junk"),
+    (8, 3, "Barrel Bumpers", "junk"),
     (9, 3, "Vault Doors", "vault"),
     (10, 3, "Tire Yard", "junk"),
     (11, 2, "The Drop", "vault"),
