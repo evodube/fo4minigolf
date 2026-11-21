@@ -216,10 +216,28 @@ def game_normals_mesh(me):
     bm.free()
 
 
+def _lighter(ob):
+    """the game's own props (the Mr. Handy statue, the boulders) come with more triangles than they need this small:
+    the heavy ones cut down (a Decimate on the copy that's exported; the scene keeps the full mesh)"""
+    if not ob.get("mg_vanilla"):
+        return None
+    tris = sum(len(p.vertices) - 2 for p in ob.data.polygons)
+    if tris <= 1500:
+        return None
+    mod = ob.modifiers.new("ExportDecimate", "DECIMATE")
+    mod.ratio = max(0.3, 1500.0 / tris)
+    mod.use_collapse_triangulate = True
+    bpy.context.view_layer.update()
+    return mod
+
+
 def _joined(name, coll, mat_name, parts):
     bm = bmesh.new()
     for ob in parts:
+        mod = _lighter(ob)
         part = world_mesh(ob)  # (with its modifiers: the greens' cup holes)
+        if mod:
+            ob.modifiers.remove(mod)
         me = bpy.data.meshes.new("tmp")
         part.to_mesh(me)
         part.free()

@@ -243,6 +243,43 @@ def resample(poly, step, closed=True):
     return out
 
 
+def simplify_rail(poly, hfunc, tol=0.12, closed=True):
+    """Douglas-Peucker on the path with the ground's height as a third axis: the points a rail needs to follow it and
+    its slopes to within tol, not one every 2 units as the outline traces them (the rails and their caps were a
+    quarter of the course's triangles)"""
+    pts = [(p[0], p[1], hfunc(p[0], p[1])) for p in poly]
+    if len(pts) < 4:
+        return list(poly)
+
+    def dp(a, b, keep):
+        pa, pb = Vector(pts[a]), Vector(pts[b])
+        d = pb - pa
+        best, at = 0.0, -1
+        for i in range(a + 1, b):
+            q = Vector(pts[i]) - pa
+            dist = (q - d * (q.dot(d) / d.length_squared)).length if d.length_squared > 1e-12 else q.length
+            if dist > best:
+                best, at = dist, i
+        if best > tol:
+            keep[at] = True
+            dp(a, at, keep)
+            dp(at, b, keep)
+
+    keep = [False] * len(pts)
+    if closed:
+        # split at the point farthest from the first, so the loop's two halves simplify on their own
+        far = max(range(len(pts)), key=lambda i: (Vector(pts[i]) - Vector(pts[0])).length)
+        keep[0] = keep[far] = True
+        pts.append(pts[0])
+        keep.append(True)
+        dp(0, far, keep)
+        dp(far, len(pts) - 1, keep)
+        return [poly[i] for i in range(len(poly)) if keep[i]]
+    keep[0] = keep[-1] = True
+    dp(0, len(pts) - 1, keep)
+    return [poly[i] for i in range(len(poly)) if keep[i]]
+
+
 def ground(name, poly, hfunc, z0, coll, mat="Turf", surface="green", hole=0, holes=(), grid=GRID):
     """A surface over the polygon (local xy), height z0 + hfunc(x, y), cut into a grid so slopes are smooth. holes =
     polygons cut out of it."""
@@ -309,7 +346,8 @@ def rail(name, path, hfunc, z0, zbottom, coll, mat, hole, closed=True, height=RA
          cap=None):
     """A rail along a path (local xy): its inner face on the path, thick outwards (to the right of a ccw polygon's
     edges = outside), its top height above the ground's height there."""
-    pts = resample(ccw(path) if closed else path, 12.0, closed)
+    path = ccw(path) if closed else path
+    pts = resample(simplify_rail(path, hfunc, closed=closed), 12.0, closed)
     n = len(pts)
     normals = []
     for i in range(n):
