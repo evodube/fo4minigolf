@@ -52,7 +52,7 @@ game's textures where it has a fitting one, and our own for the carpet, signs, r
 | 12 | Wrecking Ball | 2 | banked hairpin | a crane and swinging wrecking ball |
 | 13 | The Fork | 3 | a straight that splits round a planter | a hump on the left route, a bunker on the right |
 | 14 | Glowing Sea | 3 | wide wave | rolling ground, three sand bunkers |
-| 15 | Castle Gate | 2 | ramp up, through the gate, bend | the gatehouse and a rising portcullis |
+| 15 | Castle Gate | 3 | ramp up, through the gate, bend | the gatehouse and a rising portcullis |
 | 16 | Mr. Handy | 4 | curving barbell | his three arms sweeping the green, a bunker by the cup |
 | 17 | Zigzag | 2 | three switchbacks down a hillside | terraces with a ramp down round each bend |
 | 18 | Last Stop | 2 | banked sweep up into a funnel | a bunker at its mouth |

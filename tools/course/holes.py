@@ -21,7 +21,7 @@ HOLES = [
     (12, 2, "Wrecking Ball", "junk"),
     (13, 3, "The Fork", "military"),
     (14, 3, "Glowing Sea", "glow"),
-    (15, 2, "Castle Gate", "americana"),
+    (15, 3, "Castle Gate", "americana"),
     (16, 4, "Mr. Handy", "vault"),
     (17, 2, "Zigzag", "americana"),
     (18, 2, "Last Stop", "junk"),
