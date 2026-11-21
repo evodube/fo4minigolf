@@ -44,7 +44,7 @@ game's textures where it has a fitting one, and our own for the carpet, signs, r
 | 5 | Toxic Crossing | 2 | dumbbell | a hump between sand bunkers |
 | 6 | Vertibird | 3 | uphill, right bend, big round green | a rotor sweeping the green, a bunker |
 | 7 | Diner Dogleg | 2 | uphill into a banked 90 | the diner on the corner |
-| 8 | Barrel Bumpers | 3 | bend into a lollipop | down onto a tilted round table of rusty oil drums that kick the ball back |
+| 8 | Barrel Bumpers | 2 | bend into a lollipop | down onto a tilted round table of rusty oil drums that kick the ball back |
 | 9 | Vault Doors | 3 | long straight, step down, right | two sliding blast doors in Vault-Tec frames |
 | 10 | Tire Yard | 3 | ramp up to a clover | bouncy tyres |
 | 11 | The Drop | 2 | steep covered chute, bend at the bottom | |
