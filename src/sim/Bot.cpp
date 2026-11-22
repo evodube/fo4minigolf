@@ -332,14 +332,22 @@ namespace golf
 			}
 			if (!drops.empty()) {
 				const double mid = drops[drops.size() / 2];
-				double       s = 0.0;
-				for (int i = 0; i < 4; ++i) {
-					s += (Next(rng0) % 10001) / 10000.0;
-				}
-				const double off = std::clamp(1.0 + (s - 2.0) * 1.732 * (0.02 + (1.0 - a_skill) * 0.2), 0.7, 1.35);
-				Shot shot = Try(a_sim, dir, mid * off, 0.0);
-				if (shot.end == BallState::kWater || shot.end == BallState::kOut) {
-					shot = Try(a_sim, dir, mid, 0.0);  // (never a miss that costs a stroke this close)
+				Shot         shot = Try(a_sim, dir, mid, 0.0);
+				// a miss now and then, more the further out and the less skilled: the weight wrong (never the line),
+				// short or long of the cup but no further from it, and never into trouble
+				const double pMiss = (0.35 + (1.0 - a_skill) * 0.7) * std::clamp(cupDist / 40.0, 0.3, 1.0);
+				if ((Next(rng0) % 10000) / 10000.0 < pMiss) {
+					for (int tries = 0; tries < 12; ++tries) {
+						double s = 0.0;
+						for (int i = 0; i < 4; ++i) {
+							s += (Next(rng0) % 10001) / 10000.0;
+						}
+						const double off = std::clamp(1.0 + (s - 2.0) * 1.732 * (0.15 + (1.0 - a_skill) * 0.3), 0.5, 1.7);
+						const Shot   t = Try(a_sim, dir, mid * off, 0.0);
+						if (t.end == BallState::kRest && Distance(t.rest) < before - 0.5) {
+							return t;
+						}
+					}
 				}
 				return shot;
 			}
@@ -360,7 +368,8 @@ namespace golf
 			// still nothing: a firm putt down the route
 			best = Try(a_sim, aim, std::clamp(before * 1.4, 60.0, _spec.maxSpeed * 0.7), 0.0);
 		}
-		// their miss: off line and weight by skill, kept only if it still gains ground and stays out of trouble
+		// a miss now and then (more the less skilled): off line and weight, not dropping in, ending nearer the cup
+		// than they were but further than the true shot would have, and never into trouble; otherwise the true shot
 		std::uint32_t rng = a_seed * 747796405u + 2891336453u;
 		const auto    gauss = [&]() {
             double s = 0.0;  // (near enough normal: the sum of four uniforms)
@@ -369,20 +378,25 @@ namespace golf
             }
             return (s - 2.0) * 1.732;
 		};
-		const double aimSigma = (0.3 + (1.0 - a_skill) * 2.5) * 0.017453292519943295;
-		const double speedSigma = 0.03 + (1.0 - a_skill) * 0.3;
-		const double gain = before - (best.end == BallState::kInCup ? 0.0 : Distance(best.rest));
-		for (int tries = 0; tries < 10; ++tries) {
+		const double pMiss = 0.55 + (1.0 - a_skill) * 0.45;
+		if ((Next(rng) % 10000) / 10000.0 >= pMiss) {
+			return best;
+		}
+		const double aimSigma = (1.5 + (1.0 - a_skill) * 6.0) * 0.017453292519943295;
+		const double speedSigma = 0.12 + (1.0 - a_skill) * 0.3;
+		const double bestLeft = best.end == BallState::kInCup ? 0.0 : Distance(best.rest);
+		for (int tries = 0; tries < 16; ++tries) {
 			const double da = gauss() * aimSigma;
-			const double ds = std::clamp(1.0 + gauss() * speedSigma, 0.6, 1.4);
+			const double ds = std::clamp(1.0 + gauss() * speedSigma, 0.5, 1.6);
 			const double c = std::cos(da), s = std::sin(da);
 			const Vec2   dir{ best.dir.x * c - best.dir.y * s, best.dir.x * s + best.dir.y * c };
 			const Shot   t = Try(a_sim, dir, std::min(best.speed * ds, _spec.maxSpeed), best.wait);
-			if (t.end == BallState::kWater || t.end == BallState::kOut) {
-				continue;
+			if (t.end != BallState::kRest) {
+				continue;  // (in: not a miss; water or out: never)
 			}
-			if (t.end == BallState::kInCup || Distance(t.rest) < before - std::max(2.0, gain * 0.15)) {
-				return t;  // a miss, but a fair one: still nearer the cup
+			const double left = Distance(t.rest);
+			if (left < before - 1.0 && left > std::max(bestLeft + 4.0, before * (0.15 + (1.0 - a_skill) * 0.4))) {
+				return t;
 			}
 		}
 		return best;
