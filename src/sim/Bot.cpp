@@ -337,13 +337,15 @@ namespace golf
 				// short or long of the cup but no further from it, and never into trouble
 				const double pMiss = (0.35 + (1.0 - a_skill) * 0.7) * std::clamp(cupDist / 40.0, 0.3, 1.0);
 				if ((Next(rng0) % 10000) / 10000.0 < pMiss) {
-					for (int tries = 0; tries < 12; ++tries) {
-						double s = 0.0;
-						for (int i = 0; i < 4; ++i) {
-							s += (Next(rng0) % 10001) / 10000.0;
-						}
-						const double off = std::clamp(1.0 + (s - 2.0) * 1.732 * (0.15 + (1.0 - a_skill) * 0.3), 0.5, 1.7);
-						const Shot   t = Try(a_sim, dir, mid * off, 0.0);
+					// the smallest slip that misses: a touch off line (a lip-out) or a touch too firm or soft, growing
+					// only as far as it has to - never a putt that looks wrong
+					const double sideFirst = (Next(rng0) & 1) ? 1.0 : -1.0;
+					for (int k = 1; k <= 10; ++k) {
+						const double da = sideFirst * (k % 2 ? 1.0 : -1.0) * (0.6 + 0.35 * k) * 0.017453292519943295;
+						const double ds = 1.0 + ((Next(rng0) & 1) ? 1.0 : -1.0) * 0.025 * k;
+						const double c = std::cos(da), sn = std::sin(da);
+						const Vec2   d2{ dir.x * c - dir.y * sn, dir.x * sn + dir.y * c };
+						const Shot   t = Try(a_sim, d2, mid * ds, 0.0);
 						if (t.end == BallState::kRest && Distance(t.rest) < before - 0.5) {
 							return t;
 						}
@@ -382,12 +384,14 @@ namespace golf
 		if ((Next(rng) % 10000) / 10000.0 >= pMiss) {
 			return best;
 		}
-		const double aimSigma = (1.5 + (1.0 - a_skill) * 6.0) * 0.017453292519943295;
-		const double speedSigma = 0.12 + (1.0 - a_skill) * 0.3;
+		// growing only as far as it has to: a few degrees off line, a few percent off the weight - nothing that
+		// looks like a mis-hit
 		const double bestLeft = best.end == BallState::kInCup ? 0.0 : Distance(best.rest);
-		for (int tries = 0; tries < 16; ++tries) {
-			const double da = gauss() * aimSigma;
-			const double ds = std::clamp(1.0 + gauss() * speedSigma, 0.5, 1.6);
+		const double want = std::max(bestLeft + 4.0, before * (0.1 + (1.0 - a_skill) * 0.25));  // (left this far, at least)
+		for (int k = 1; k <= 16; ++k) {
+			const double grow = 0.5 + 0.15 * k;
+			const double da = gauss() * (1.0 + (1.0 - a_skill) * 2.0) * grow * 0.017453292519943295;
+			const double ds = std::clamp(1.0 + gauss() * 0.04 * grow, 0.85, 1.15);
 			const double c = std::cos(da), s = std::sin(da);
 			const Vec2   dir{ best.dir.x * c - best.dir.y * s, best.dir.x * s + best.dir.y * c };
 			const Shot   t = Try(a_sim, dir, std::min(best.speed * ds, _spec.maxSpeed), best.wait);
@@ -395,7 +399,7 @@ namespace golf
 				continue;  // (in: not a miss; water or out: never)
 			}
 			const double left = Distance(t.rest);
-			if (left < before - 1.0 && left > std::max(bestLeft + 4.0, before * (0.15 + (1.0 - a_skill) * 0.4))) {
+			if (left < before - 1.0 && left > want) {
 				return t;
 			}
 		}
