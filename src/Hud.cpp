@@ -355,7 +355,8 @@ namespace mg::Hud
 			Print(a_v, Mono(), a_st.keys, 30.0f, a_v.h - 34.0f, 12, Fade(kDim, 0.9f), 0, 1.0f);
 		}
 
-		// hold activate on the course: who to play, beside the crosshair (as Playable Pool's)
+		// hold activate on the course: who to play. A compact panel left of the crosshair, sized to what's in it (the
+		// game's own prompt is to the right of the crosshair: kept clear of it)
 		void PickList(ImGuiViewport* a_viewport, const Golf::HudState& a_st)
 		{
 			View v;
@@ -367,21 +368,46 @@ namespace mg::Hud
 			v.origin = a_viewport->Pos;
 			v.w = a_viewport->Size.x / v.s;
 			v.h = a_viewport->Size.y / v.s;
-			const float x = v.w * 0.5f + 40.0f;
-			float       y = v.h * 0.5f + 10.0f;
-			const float h = 48.0f + 24.0f * static_cast<float>(a_st.pick.size());
-			Chamfer(v, x - 14.0f, y - 12.0f, 400.0f, h, 8.0f, kPanel, kEdge);
-			Print(v, Mono(), "WHO PLAYS?", x, y, 13, kDim, 0, 2.0f);
-			y += 22.0f;
+			constexpr float kTitle = 10.0f, kName = 14.0f, kHint = 9.0f, kRow = 18.0f, kPad = 12.0f, kArrow = 14.0f;
+			// the hint: one line per part ("UP/DOWN: PICK", "F ON THE COURSE: PLAY")
+			std::vector<std::string> hints;
+			for (std::size_t at = 0; at <= a_st.pickHint.size();) {
+				const std::size_t dot = a_st.pickHint.find(" · ", at);
+				hints.push_back(a_st.pickHint.substr(at, dot == std::string::npos ? std::string::npos : dot - at));
+				if (dot == std::string::npos) {
+					break;
+				}
+				at = dot + std::string_view(" · ").size();
+			}
+			float inner = TextWidth(Mono(), "WHO PLAYS?", kTitle, 2.0f);
+			for (const auto& n : a_st.pick) {
+				inner = std::max(inner, kArrow + TextWidth(Title(), n, kName, 1.0f));
+			}
+			for (const auto& hnt : hints) {
+				inner = std::max(inner, TextWidth(Mono(), hnt, kHint, 1.0f));
+			}
+			const float w = inner + kPad * 2.0f;
+			const float h = kPad + 16.0f + kRow * static_cast<float>(a_st.pick.size()) + 6.0f + 13.0f * static_cast<float>(hints.size()) + kPad * 0.6f;
+			const float x0 = v.w * 0.5f - 36.0f - w;  // (its right edge a little left of the crosshair)
+			const float y0 = v.h * 0.5f - h * 0.5f;
+			Chamfer(v, x0, y0, w, h, 6.0f, kPanel, kEdge);
+			const float x = x0 + kPad;
+			float       y = y0 + kPad;
+			Print(v, Mono(), "WHO PLAYS?", x, y, kTitle, kDim, 0, 2.0f);
+			y += 16.0f;
 			for (std::size_t i = 0; i < a_st.pick.size(); ++i) {
 				const bool on = static_cast<int>(i) == a_st.pickSel;
 				if (on) {
-					DL::AddTriangleFilled(v.dl, v.P(x, y + 6), v.P(x + 10, y + 12), v.P(x, y + 18), kText);
+					DL::AddTriangleFilled(v.dl, v.P(x, y + 4), v.P(x + 7, y + 8.5f), v.P(x, y + 13), kText);
 				}
-				Print(v, Title(), a_st.pick[i], x + 18, y - 2, 20, on ? kBright : kOff, on ? kGlow : 0, 1.5f);
-				y += 24.0f;
+				Print(v, Title(), a_st.pick[i], x + kArrow, y, kName, on ? kBright : kOff, on ? kGlow : 0, 1.0f);
+				y += kRow;
 			}
-			Print(v, Mono(), a_st.pickHint, x, y + 4.0f, 12, kDim, 0, 1.0f);
+			y += 6.0f;
+			for (const auto& hnt : hints) {
+				Print(v, Mono(), hnt, x, y, kHint, kDim, 0, 1.0f);
+				y += 13.0f;
+			}
 		}
 
 		void __stdcall Draw()
