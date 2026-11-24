@@ -5,7 +5,7 @@ own ball physics (like Playable Pool). Between holes you're moved to the next te
 
 ## Playing
 
-Build the **Mini Golf Course** from the workshop (Furniture > Mini Golf) and activate it (or press **Numpad 7**
+Build the **Mini Golf Course** from the workshop (Furniture > Evodube Games > Mini Golf) and activate it (or press **Numpad 7**
 anywhere on or near it) to start a round at hole 1.
 
 **Hold** the activate key on the course instead to play someone 1v1: a list comes up of who's near you to play

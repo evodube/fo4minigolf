@@ -117,6 +117,11 @@ def transform(form_id: int, editor_id: str, pos: tuple, rot: tuple, scale: float
     )
 
 
+def form_list(form_id: int, editor_id: str, forms: list) -> bytes:
+    return record(b"FLST", 0, form_id, subrecord(b"EDID", zstring(editor_id))
+                  + b"".join(subrecord(b"LNAM", struct.pack("<I", f)) for f in forms))
+
+
 def menu_art(form_id: int, editor_id: str, keyword_id: int, mesh: str, preview: int, bounds: tuple) -> bytes:
     """the picture on a workshop menu tab: an art object with the tab's keyword (the menu finds a tab's art by it;
     Amusement Games' and Wasteland Wagers' way)"""
@@ -153,24 +158,35 @@ def build() -> bytes:
     acti = [activator(course, "fo4minigolfCourse", "Mini Golf Course", "fo4minigolf\\Course.nif", COURSE_BOUNDS, "Play")]
     art = [menu_art(OWN | (FIRST_ID + 7), "fo4minigolfWorkshopMenuArt", menu, "fo4minigolf\\CoursePreview.nif", preview,
                     COURSE_BOUNDS)]
+
+    # Evodube Games: a submenu of Furniture shared by evodube's mods (Furniture > Evodube Games > Mini Golf). A
+    # workshop submenu is a form list whose first entry is the keyword naming it (as Fallout4.esm's
+    # WorkshopMenu01Furniture starts with WorkshopRecipeFilterFurniture). Each mod carries its own copy with the same
+    # editor ids; the plugin puts the first one found in the Furniture menu and each mod's category into that one
+    # (Forms.h AddWorkshopMenu), so there's only ever one Evodube Games
+    games = OWN | (FIRST_ID + 0x8)
+    keywords.append(menu_keyword(games, "EvodubeGamesWorkshopMenu", "Evodube Games"))
+    art.append(menu_art(OWN | (FIRST_ID + 0x9), "EvodubeGamesWorkshopMenuArt", games, "fo4minigolf\\CoursePreview.nif", preview,
+                    COURSE_BOUNDS))
+    lists = [form_list(OWN | (FIRST_ID + 0xa), "EvodubeGamesWorkshopMenuList", [games, menu])]
     recipes = [workshop_recipe(OWN | (FIRST_ID + 2), "workshop_co_fo4minigolfCourse", course,
                                [(WOOD, 60), (STEEL, 30), (SCREWS, 6)], menu)]
     stats = [stat(OWN | (FIRST_ID + 3), "fo4minigolfBall", "fo4minigolf\\Ball.nif", BALL_BOUNDS),
              stat(OWN | (FIRST_ID + 4), "fo4minigolfPutter", "fo4minigolf\\Putter.nif", PUTTER_BOUNDS),
              stat(OWN | (FIRST_ID + 5), "fo4minigolfDot", "fo4minigolf\\Dot.nif", DOT_BOUNDS)]
-    count = len(keywords) + len(transforms) + len(acti) + len(recipes) + len(stats) + len(art)
+    count = len(keywords) + len(transforms) + len(acti) + len(recipes) + len(stats) + len(art) + len(lists)
     header = record(
         b"TES4",
         FLAG_MASTER | FLAG_LIGHT,
         0,
-        subrecord(b"HEDR", struct.pack("<fiI", 1.0, count, FIRST_ID + 8))
+        subrecord(b"HEDR", struct.pack("<fiI", 1.0, count, FIRST_ID + 0xB))
         + subrecord(b"CNAM", zstring("evodube"))
         + subrecord(b"SNAM", zstring("Mini golf: an 18-hole course for your settlements"))
         + subrecord(b"MAST", zstring("Fallout4.esm"))
         + subrecord(b"DATA", struct.pack("<Q", 0)),
     )
     # groups in the order the game's own master has them
-    return (header + group(b"KYWD", b"".join(keywords)) + group(b"TRNS", b"".join(transforms))
+    return (header + group(b"KYWD", b"".join(keywords)) + group(b"FLST", b"".join(lists)) + group(b"TRNS", b"".join(transforms))
             + group(b"ACTI", b"".join(acti)) + group(b"STAT", b"".join(stats)) + group(b"ARTO", b"".join(art))
             + group(b"COBJ", b"".join(recipes)))
 
