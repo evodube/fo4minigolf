@@ -1,0 +1,40 @@
+Wasteland Mini Golf (fo4minigolf) - credits and licences
+=========================================================
+
+The mod
+  Code (the F4SE plugin and tools): GNU General Public License v3.0 - https://www.gnu.org/licenses/gpl-3.0.html
+  Source: https://github.com/evodube/fo4minigolf
+
+Fallout 4 assets
+  Some course pieces reuse Fallout 4's own meshes and textures (the Mr. Handy statue, tyres, Nuka-Cola bottles, oil
+  drums, plants, rocks and the like). They belong to Bethesda Softworks and are used under Bethesda's terms for mods
+  of the same game; they need Fallout 4 to be of any use.
+
+Sounds (Data\Sound\fo4minigolf)
+  cup_1.wav     "Drop ball in cup-1.wav" by AGFX - https://freesound.org/s/20428/
+                Licence: Creative Commons Attribution 4.0 (CC BY 4.0) - https://creativecommons.org/licenses/by/4.0/
+                Changes: trimmed, filtered, compressed, levelled, converted to mono 44.1 kHz.
+  putt_1-6.wav  "putt.wav" by 170129 - https://freesound.org/people/170129/sounds/408260/
+                Licence: CC0 1.0 (public domain) - https://creativecommons.org/publicdomain/zero/1.0/
+  putt_7.wav, cup_2.wav
+                "Minigolf putt, right into the hole!" by pfranzen - https://freesound.org/people/pfranzen/sounds/512505/
+                Licence: CC0 1.0
+  cup_3.wav     "golf_putting.wav" by inbeeld - https://freesound.org/people/inbeeld/sounds/21878/
+                Licence: CC0 1.0
+  wall_*, rim_*, land_*
+                "Impact Sounds" by Kenney - https://kenney.nl/assets/impact-sounds
+                Licence: CC0 1.0
+  splash_*, holein_*
+                made for this mod (synthesised); part of the mod.
+
+Fonts
+  HUD: Chakra Petch (The Chakra Petch Project Authors) and Share Tech Mono (Carrois Type Design, Ralph du
+       Carrois) - SIL Open Font License 1.1
+       (licence texts beside them in Data\F4SE\Plugins\fo4minigolf\hud)
+  Course signs (drawn into the textures): Anton (The Anton Project Authors) and Archivo Black (The Archivo Black
+       Project Authors) -
+       SIL Open Font License 1.1 - https://openfontlicense.org
+
+Libraries
+  CommonLibF4 - GNU General Public License v3.0 with its exceptions (lib/commonlibf4/LICENSE, EXCEPTIONS)
+  F4SE, Address Library for F4SE Plugins and F4SE Menu Framework are separate downloads, under their own terms.
