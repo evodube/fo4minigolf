@@ -49,6 +49,10 @@ namespace mg
 		guideLength = std::clamp(ReadFloat(L"Putting", L"fGuideLength", 60.0f), 0.0f, 1000.0f);
 		guideFlipY = ReadInt(L"Putting", L"bGuideFlipY", 1) != 0;
 
+		controller = ReadInt(L"Controller", L"bEnabled", 1) != 0;
+		padDeadzone = std::clamp(ReadFloat(L"Controller", L"fDeadzone", 0.22f), 0.0f, 0.9f);
+		padPowerSpeed = std::clamp(ReadFloat(L"Controller", L"fPowerSpeed", 1.0f), 0.1f, 5.0f);
+		padInvertPull = ReadInt(L"Controller", L"bInvertPull", 0) != 0;
 		oppSkill = std::clamp(ReadFloat(L"Opponent", L"fSkill", 0.35f), 0.0f, 1.0f);
 		oppRange = std::clamp(ReadFloat(L"Opponent", L"fRange", 2000.0f), 200.0f, 10000.0f);
 		oppHidden = ReadInt(L"Opponent", L"bHide", 1) != 0;

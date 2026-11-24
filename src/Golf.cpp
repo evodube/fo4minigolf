@@ -5,6 +5,7 @@
 #include "Audio.h"
 #include "Forms.h"
 #include "MenuWatch.h"
+#include "Pad.h"
 #include "Papyrus.h"
 #include "Settings.h"
 #include "Util.h"
@@ -218,9 +219,29 @@ namespace mg
 
 	void Golf::PollInput()
 	{
-		// the game's activate key, down or up (a course activated: tapped plays solo, held plays a settler)
+		// the controller, read once a frame (nothing when it's off in the ini, the game's not in front or paused)
+		const auto& ps = Settings::Get();
+		const auto  nowT = std::chrono::steady_clock::now();
+		const float padDt = _padLastPoll.time_since_epoch().count() ? std::clamp(std::chrono::duration<float>(nowT - _padLastPoll).count(), 0.0f, 0.1f) : 0.0f;
+		_padLastPoll = nowT;
+		const auto pad = ps.controller && util::GameHasFocus() && !IsGamePaused() ? Pad::Poll(ps.padDeadzone) : Pad::State{};
+		const auto padHeld = [&](std::uint16_t a_b) { return (pad.buttons & a_b) != 0; };
+		const auto padPressed = [&](std::uint16_t a_b) { return (pad.buttons & a_b) != 0 && (_padWas & a_b) == 0; };
+		if (pad.connected && (pad.buttons != 0 || pad.rt > 0.3f || pad.lt > 0.3f || pad.lx != 0.0f || pad.ly != 0.0f || pad.rx != 0.0f || pad.ry != 0.0f)) {
+			_padInUse = true;
+		} else if (util::GameHasFocus() && ((::GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0 || (::GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0)) {
+			_padInUse = false;
+		}
+		struct PadDone  // (last frame's buttons kept however this returns)
+		{
+			Golf* g;
+			std::uint16_t b;
+			~PadDone() { g->_padWas = b; }
+		} padDone{ this, pad.buttons };
+
+		// the game's activate key (or A), down or up (a course activated: tapped plays solo, held picks who plays)
 		if (const int vk = _activateVk.load(); vk > 0 && vk < 256) {
-			const bool down = util::GameHasFocus() && (::GetAsyncKeyState(vk) & 0x8000) != 0;
+			const bool down = (util::GameHasFocus() && (::GetAsyncKeyState(vk) & 0x8000) != 0) || padHeld(Pad::kA);
 			const bool was = _activateDown.load();
 			if (down && !was) {
 				_activateDownAt = NowMs();
@@ -245,6 +266,16 @@ namespace mg
 					_pickCancel = true;
 				}
 			}
+			// (the controller: the D-pad, B to cancel)
+			if (padPressed(Pad::kUp)) {
+				_pickMove += -1;
+			}
+			if (padPressed(Pad::kDown)) {
+				_pickMove += 1;
+			}
+			if (padPressed(Pad::kB)) {
+				_pickCancel = true;
+			}
 		}
 		if (!_playing) {
 			// not playing: only the play key (a round on the nearest course)
@@ -260,6 +291,8 @@ namespace mg
 				}
 			}
 			_lmbWas = _rmbWas = false;
+			_padRtWas = _padCharging = false;
+			_padBHeld = 0.0f;
 			return;
 		}
 		if (!util::GameHasFocus() || menus::AnyBlocking()) {
@@ -267,6 +300,8 @@ namespace mg
 			if (_charging) {
 				_charging = false;  // (a menu came up mid-charge: no putt)
 			}
+			_padRtWas = _padCharging = false;
+			_padBHeld = 0.0f;
 			_keysWas.fill(false);
 			return;
 		}
@@ -306,6 +341,58 @@ namespace mg
 		}
 		if (pressed(s.keyLeave) && tasks) {
 			tasks->AddTask([this]() { EndRound("you left"); });
+		}
+
+		// ---- the controller (the right stick turns the view through the game's own free camera, as the mouse does)
+		if (!pad.connected) {
+			_padRtWas = false;
+			_padCharging = false;
+			_padBHeld = 0.0f;
+			return;
+		}
+		const bool rt = pad.rt > 0.5f;
+		if (rt && !_padRtWas && _phase == Phase::kAim && !_overhead && !_oppTurn && !_charging) {
+			_power = 0.0f;
+			_charging = true;  // RT held: the left stick's pull is the putt's power now
+			_padCharging = true;
+		}
+		if (_padCharging && _charging) {
+			const float pull = (s.padInvertPull ? pad.ly : -pad.ly);  // (back on the stick: down, so -ly)
+			if (pull > 0.0f) {
+				_power = std::clamp(_power.load() + pull * s.padPowerSpeed * padDt, 0.0f, 1.0f);
+			} else if (pull < -0.5f) {
+				_power = std::clamp(_power.load() + pull * s.padPowerSpeed * padDt, 0.0f, 1.0f);  // (forward: back off)
+			}
+			if (padPressed(Pad::kB)) {
+				_charging = false;  // B: no putt
+				_padCharging = false;
+				_padBHeld = -10.0f;  // (that B press isn't also the start of ending the round)
+			} else if (!rt) {
+				const float power = _power.load();
+				_charging = false;
+				_padCharging = false;
+				if (tasks && power > 0.01f) {
+					tasks->AddTask([this, power]() { Putt(power); });
+				}
+			}
+		} else if (!_charging) {
+			_padCharging = false;
+		}
+		_padRtWas = rt;
+		if (padPressed(Pad::kY) && !_charging) {
+			_overhead = !_overhead;
+		}
+		// B held a second: the round's over (a tap does nothing, so it can't be hit by accident)
+		if (padHeld(Pad::kB) && !_charging) {
+			_padBHeld += padDt;
+			if (_padBHeld >= 1.0f) {
+				_padBHeld = -10.0f;
+				if (tasks) {
+					tasks->AddTask([this]() { EndRound("you left"); });
+				}
+			}
+		} else if (!padHeld(Pad::kB)) {
+			_padBHeld = 0.0f;
 		}
 	}
 
@@ -1714,7 +1801,8 @@ namespace mg
 			h.pickSel = _pick->sel;
 			const int         act = _activateVk.load();
 			const std::string key = act > 0 ? Settings::Key(act) : std::string("ACTIVATE");
-			h.pickHint = std::format("UP/DOWN: PICK · {} ON THE COURSE: PLAY · {}: CANCEL", key, Settings::Key(Settings::Get().keyLeave));
+			h.pickHint = _padInUse ? std::string("D-PAD: PICK · A ON THE COURSE: PLAY · B: CANCEL") :
+			                         std::format("UP/DOWN: PICK · {} ON THE COURSE: PLAY · {}: CANCEL", key, Settings::Key(Settings::Get().keyLeave));
 		}
 		if (_playing && _hole < static_cast<int>(_course.holes.size())) {
 			const auto& hole = _course.holes[_hole];
@@ -1741,7 +1829,10 @@ namespace mg
 			const auto& s = Settings::Get();
 			UpdateGuide();
 			h.guide = _guide;
-			if (_oppTurn) {
+			if (_padInUse) {
+				h.keys = _oppTurn ? std::format("{} IS PUTTING · Y: VIEW FROM ABOVE · HOLD B: END THE ROUND", Upper(_opponentName)) :
+				                    std::string("RIGHT STICK: AIM · HOLD RT, PULL THE LEFT STICK BACK, LET GO TO PUTT (B: CANCEL) · Y: VIEW FROM ABOVE · HOLD B: END THE ROUND");
+			} else if (_oppTurn) {
 				h.keys = std::format("{} IS PUTTING · RIGHT BUTTON / {}: VIEW FROM ABOVE · {}: END THE ROUND", Upper(_opponentName),
 					Settings::Key(s.keyOverhead), Settings::Key(s.keyLeave));
 			} else {

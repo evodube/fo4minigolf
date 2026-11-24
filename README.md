@@ -19,6 +19,13 @@ putts are is `[Opponent] fSkill` in the ini.
 - **Right mouse button / Q:** look down on the whole hole.
 - **X:** end the round.
 
+**With a controller** (Xbox-style, alongside mouse and keyboard; `[Controller]` in the ini):
+- **Right stick:** aim (turns the view).
+- **Putt:** hold **RT**, pull the **left stick** back for power, let go of RT (**B** while holding cancels).
+- **Y:** look down on the whole hole. **Hold B** a second: end the round.
+- On the course: **tap A** for a solo round, **hold A** to pick who plays (**D-pad** to choose, **A** on the course to
+  play, **B** to cancel).
+
 After each hole you're moved to the next tee, and the scorecard shows. A hole's over at 6 strokes. Water and out of
 bounds cost a stroke and put the ball back where you played from. The course's windmill, rotor, doors and the rest
 keep moving whether anyone's playing or not. Settings are in `Data\F4SE\Plugins\fo4minigolf.ini`.

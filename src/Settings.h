@@ -33,6 +33,14 @@ namespace mg
 		float guideLength{ 60.0f };     // ...how far it reaches (game units: about 85 cm)
 		bool  guideFlipY{ true };       // (if the line shows up mirrored top to bottom, set 0)
 
+		// [Controller] an Xbox-style controller (XInput), alongside the mouse and keyboard: the right stick aims (the
+		// view, as the mouse), hold RT and pull the left stick back for power, let go of RT to putt (B cancels a putt);
+		// Y the view from above; hold B a second to end the round; hold A on the course to pick who plays (D-pad, A, B)
+		bool  controller{ true };
+		float padDeadzone{ 0.22f };    // how far a stick moves before it counts (0..0.9)
+		float padPowerSpeed{ 1.0f };   // power a second with the stick pulled all the way back (1 = full)
+		bool  padInvertPull{ false };  // pushing the stick forward gives power instead
+
 		// [Opponent] a settler played 1v1 (hold the activate key on the course)
 		float oppSkill{ 0.35f };     // 0..1: how true their putts are (1: the physics' own best shot, near enough)
 		float oppRange{ 2000.0f };   // how near you someone has to be to be asked (game units)

@@ -210,6 +210,14 @@ namespace mg
 		std::atomic<bool>   _picking{ false };   // (the render thread: the arrows go to it)
 		std::atomic<int>    _pickMove{ 0 };      // arrow presses not yet applied (render thread -> main)
 		std::atomic<bool>   _pickCancel{ false };  // the leave key (or Backspace) pressed with the list up
+
+		// ---- the controller (render thread; Pad.h)
+		std::uint16_t                         _padWas{ 0 };       // its buttons last frame
+		bool                                  _padRtWas{ false };
+		bool                                  _padCharging{ false };  // this putt's power is from the stick
+		float                                 _padBHeld{ 0.0f };  // seconds B's been held (a second ends the round)
+		std::chrono::steady_clock::time_point _padLastPoll{};
+		std::atomic<bool>                     _padInUse{ false };  // the controller was used last (the HUD's hints)
 		std::array<bool, 2> _arrowWas{};
 
 		// ---- the settler you're playing (none: solo)
