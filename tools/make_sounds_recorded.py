@@ -10,7 +10,7 @@ Sources (all free to ship in the mod):
   cup   freesound 20428 "Drop ball in cup-1.wav" by AGFX (CC BY 4.0: credited in the README);
         512505 (above): its drop; freesound 21878 "golf_putting.wav" by inbeeld (CC0): its drop
   wall  Kenney "Impact Sounds" (CC0): light wood (the rails) and light metal (the set pieces) knocks
-  rim   Kenney: light plate knocks, pitched up and quiet (the cup's lip)
+  rim   Kenney: light plate knocks, quiet (the cup's lip)
   land  Kenney: light generic and soft knocks (a hop landing on the turf)
 """
 import os
@@ -22,18 +22,21 @@ SRC = os.path.join(ROOT, "tools", "sounds_src")
 OUT = os.path.join(ROOT, "dist", "Data", "Sound", "fo4minigolf")
 K = os.path.join(SRC, "kenney")
 
+# the putter's own ring (a metal putter's ping, about 5 kHz) notched out and the top rolled off: a tock, not a whistle
+TAME_PUTT = "highpass=f=110,equalizer=f=5100:t=q:w=3:g=-30,equalizer=f=4950:t=q:w=3:g=-20,lowpass=f=3800"
+
 # (bank, source, start s, length s, extra filters)
 CLIPS = {
-    "putt": [("freesound_408260_putt_170129.mp3", t - 0.012, 0.42, "afftdn=nr=24:nf=-40,agate=threshold=0.02:release=80")
+    "putt": [("freesound_408260_putt_170129.mp3", t - 0.012, 0.42, "afftdn=nr=24:nf=-40,agate=threshold=0.02:release=80," + TAME_PUTT)
              for t in (1.191, 3.846, 6.108, 9.785, 11.617, 13.805)]
-    + [("freesound_512505_minigolf_putt_pfranzen.mp3", 0.080, 0.40, "")],
+    + [("freesound_512505_minigolf_putt_pfranzen.mp3", 0.080, 0.40, TAME_PUTT)],
     "cup": [("agfx_drop_ball_in_cup_1.wav", 0.065, 2.10, "acompressor=threshold=-24dB:ratio=3:attack=1:release=60:makeup=6dB"),
             ("freesound_512505_minigolf_putt_pfranzen.mp3", 0.88, 1.64, ""),
             ("freesound_21878_golf_putting_inbeeld.mp3", 0.38, 1.10, "acompressor=threshold=-30dB:ratio=3:attack=1:release=60:makeup=8dB")],
-    "wall": [(os.path.join("kenney", f + ".ogg"), 0.0, 0.40, "") for f in
+    "wall": [(os.path.join("kenney", f + ".ogg"), 0.0, 0.40, "lowpass=f=4000") for f in
              ("impact_wood_light_000", "impact_wood_light_001", "impact_wood_light_002", "impact_wood_light_003",
               "impact_metal_light_000", "impact_metal_light_002")],
-    "rim": [(os.path.join("kenney", f + ".ogg"), 0.0, 0.35, "asetrate=44100*1.35,aresample=44100") for f in
+    "rim": [(os.path.join("kenney", f + ".ogg"), 0.0, 0.35, "lowpass=f=5000") for f in
             ("impact_plate_light_001", "impact_plate_light_003")],
     "land": [(os.path.join("kenney", f + ".ogg"), 0.0, 0.30, "") for f in
              ("impact_generic_light_000", "impact_generic_light_002", "impact_soft_medium_001", "impact_soft_medium_003")],
