@@ -37,6 +37,7 @@ namespace mg::Forms
 	// changes to them).
 	inline constexpr std::uint32_t    kGamesMenuListID = 0x80A;  // FLST EvodubeGamesWorkshopMenuList
 	inline constexpr std::string_view kGamesMenuEditorID = "EvodubeGamesWorkshopMenu";
+	inline constexpr std::string_view kGamesMenuName = "Evodube Games";
 
 	inline RE::BGSListForm* GamesSubmenuIn(RE::BGSListForm* a_menu)
 	{
@@ -45,8 +46,11 @@ namespace mg::Forms
 			if (!sub || sub->arrayOfForms.empty() || !sub->arrayOfForms[0]) {
 				continue;
 			}
+			// by the name it shows (keywords' editor ids aren't kept in the game: looked for by those, none of the
+			// mods found another's, and each put in its own Evodube Games)
 			auto* kw = sub->arrayOfForms[0]->As<RE::BGSKeyword>();
-			if (kw && std::string_view(kw->formEditorID.c_str() ? kw->formEditorID.c_str() : "") == kGamesMenuEditorID) {
+			if (kw && (RE::TESFullName::GetFullName(*kw) == kGamesMenuName ||
+						  std::string_view(kw->formEditorID.c_str() ? kw->formEditorID.c_str() : "") == kGamesMenuEditorID)) {
 				return sub;
 			}
 		}
