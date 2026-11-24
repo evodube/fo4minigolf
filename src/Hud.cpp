@@ -414,7 +414,7 @@ namespace mg::Hud
 		{
 			const auto st = Golf::Get().Hud();
 			auto*      viewport = GetMainViewport();
-			if (viewport && !st.playing && !st.pick.empty()) {
+			if (viewport && !st.playing && !st.pick.empty() && !Golf::Paused()) {
 				Texture(Title().file);
 				if (!g_artMissing) {
 					PickList(viewport, st);

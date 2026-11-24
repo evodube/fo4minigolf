@@ -239,6 +239,12 @@ namespace mg
 				}
 				_arrowWas[i] = down;
 			}
+			// ...and away with the leave key (X) or Backspace
+			for (const int vk : { Settings::Get().keyLeave, static_cast<int>(VK_BACK) }) {
+				if (vk > 0 && vk < 256 && util::GameHasFocus() && (::GetAsyncKeyState(vk) & 0x8000) != 0) {
+					_pickCancel = true;
+				}
+			}
 		}
 		if (!_playing) {
 			// not playing: only the play key (a round on the nearest course)
@@ -325,6 +331,9 @@ namespace mg
 		_haveLast = true;
 		dt = std::clamp(dt, 0.0f, kMaxFrame);
 		if (IsGamePaused()) {
+			if (_pick) {
+				ClosePick();  // (the who-plays list never left up behind a menu, or while the game stands still)
+			}
 			return;  // (menus, the Pip-Boy, the workshop: everything holds still)
 		}
 		_clock += dt;
@@ -362,7 +371,7 @@ namespace mg
 					inReach = (first->data.location - player->data.location).Length() < Settings::Get().oppRange + 600.0f;
 				}
 			}
-			if (_playing || !course || !inReach || _pick->idle > 20.0f || IsGamePaused()) {
+			if (_playing || !course || !inReach || _pick->idle > 20.0f || _pickCancel.exchange(false)) {
 				ClosePick();
 			}
 		}
@@ -558,6 +567,9 @@ namespace mg
 		_pick.reset();
 		_picking = false;
 		_pickMove = 0;
+		_pickCancel = false;
+		std::scoped_lock lock(_hudMutex);
+		_hud.pick.clear();  // (gone from the HUD now, not at the next update)
 	}
 
 	void Golf::StartRound(RE::TESObjectREFR* a_course, RE::Actor* a_opponent)
@@ -1702,7 +1714,7 @@ namespace mg
 			h.pickSel = _pick->sel;
 			const int         act = _activateVk.load();
 			const std::string key = act > 0 ? Settings::Key(act) : std::string("ACTIVATE");
-			h.pickHint = std::format("UP/DOWN: PICK · {} ON THE COURSE: PLAY", key);
+			h.pickHint = std::format("UP/DOWN: PICK · {} ON THE COURSE: PLAY · {}: CANCEL", key, Settings::Key(Settings::Get().keyLeave));
 		}
 		if (_playing && _hole < static_cast<int>(_course.holes.size())) {
 			const auto& hole = _course.holes[_hole];

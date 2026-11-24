@@ -26,6 +26,7 @@ namespace mg
 	class Golf
 	{
 	public:
+		static bool Paused() { return IsGamePaused(); }  // (the HUD: nothing of ours drawn over a menu)
 		static Golf& Get()
 		{
 			static Golf instance;
@@ -208,6 +209,7 @@ namespace mg
 		std::optional<Pick> _pick;
 		std::atomic<bool>   _picking{ false };   // (the render thread: the arrows go to it)
 		std::atomic<int>    _pickMove{ 0 };      // arrow presses not yet applied (render thread -> main)
+		std::atomic<bool>   _pickCancel{ false };  // the leave key (or Backspace) pressed with the list up
 		std::array<bool, 2> _arrowWas{};
 
 		// ---- the settler you're playing (none: solo)
