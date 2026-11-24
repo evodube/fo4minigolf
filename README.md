@@ -78,7 +78,8 @@ game's textures where it has a fitting one, and our own for the carpet, signs, r
 `src/`: `Golf.cpp` is the game (the courses' obstacles turned every frame, your round, the shot camera, the ball,
 putter and guide), `Hud.cpp` the HUD, and the rest is shared with Playable Pool, Wasteland Wagers and Amusement Games
 (the Present hook, the free camera hooks, the menus watch, the sounds through XAudio2). `tools/make_esl.py` writes
-`fo4minigolf.esl`; `tools/make_sounds.py` the sounds.
+`fo4minigolf.esl`; `tools/make_sounds_recorded.py` the sounds from recordings (`tools/sounds_src`), `tools/make_sounds.py`
+the synthesised splash and hole-in jingle.
 
 ## Making the course
 
@@ -95,3 +96,14 @@ Blender 5.2 with PyNifly; see `tools/course/`:
    on, and each moving obstacle as a named node the plugin turns), and the ball, putter and guide dot.
 
 `tools/course/blend/minigolf.blend` is the built scene.
+
+## Credits
+
+Sounds:
+- Ball dropping in the cup (`cup_1`): ["Drop ball in cup-1.wav"](https://freesound.org/s/20428/) by AGFX, licensed under
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) (trimmed, levelled).
+- Putts and a cup drop: ["putt.wav"](https://freesound.org/people/170129/sounds/408260/) by 170129,
+  ["Minigolf putt, right into the hole!"](https://freesound.org/people/pfranzen/sounds/512505/) by pfranzen and
+  ["golf_putting.wav"](https://freesound.org/people/inbeeld/sounds/21878/) by inbeeld - all CC0.
+- Rail, rim and landing knocks: [Kenney "Impact Sounds"](https://kenney.nl/assets/impact-sounds) - CC0.
+

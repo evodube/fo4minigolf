@@ -138,8 +138,8 @@ def main():
     root = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "dist", "Data")
     out = os.path.join(root, "Sound", "fo4minigolf")
     os.makedirs(out, exist_ok=True)
-    for name, fn, takes in (("putt", putt, 4), ("wall", wall, 4), ("rim", rim, 3), ("cup", cup, 3), ("splash", splash, 2),
-                            ("land", land, 3), ("holein", holein, 3)):
+    # (putt, wall, rim, cup and land are recordings now: tools/make_sounds_recorded.py; these two are still made here)
+    for name, fn, takes in (("splash", splash, 2), ("holein", holein, 3)):
         for k in range(takes):
             write(os.path.join(out, f"{name}_{k + 1}.wav"), fn(k))
     print("wrote", out)
